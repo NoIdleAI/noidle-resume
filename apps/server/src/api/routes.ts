@@ -48,6 +48,12 @@ export function registerRoutes(app: FastifyInstance, ctx: AppContext): void {
     return { ok: true };
   });
 
+  // ---- 最近会话发现（登记下拉；只读扫描转写根，不入库） ----
+  app.get('/api/v1/discover/sessions', async (req) => {
+    const q = req.query as { hours?: string };
+    return { sessions: services.discover.list(q.hours ? Number(q.hours) : undefined) };
+  });
+
   // ---- 恢复任务 ----
   app.get('/api/v1/tasks', async (req) => {
     const q = req.query as { limit?: string; offset?: string };
@@ -71,6 +77,13 @@ export function registerRoutes(app: FastifyInstance, ctx: AppContext): void {
     const { id } = req.params as { id: string };
     const task = services.tasks.cancel(id);
     ctx.auditNote('api.tasks.cancel', id);
+    return { task: toTaskDto(task) };
+  });
+
+  app.post('/api/v1/tasks/:id/pause', async (req) => {
+    const { id } = req.params as { id: string };
+    const task = services.tasks.pause(id);
+    ctx.auditNote('api.tasks.pause', id);
     return { task: toTaskDto(task) };
   });
 

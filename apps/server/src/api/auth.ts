@@ -68,6 +68,8 @@ function unauthorized(reply: FastifyReply, req: FastifyRequest): void {
 export function applyAuth(app: FastifyInstance, opts: { token: string; port: number }): void {
   app.addHook('onRequest', async (req, reply) => {
     const url = req.raw.url ?? '';
+    // 鉴权只护 API：静态页面壳本身不含数据（§11.1），数据全部走 /api/*
+    if (!url.startsWith('/api/')) return;
     if (url.startsWith('/api/v1/health') || url.startsWith('/api/v1/auth/')) return;
 
     const host = req.headers.host ?? '';

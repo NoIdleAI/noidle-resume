@@ -69,8 +69,9 @@ export function verifySessionIdentity(
     return { ok: false, reason: `工作区路径不存在: ${projectPath}` };
   }
 
-  // 只读前若干行拿 cwd（会话首帧必带），避免为核验读整个大文件
-  const head = readHeadLines(file, 40);
+  // 只读头部拿 cwd（每帧必带）。窗宽与发现扫描器一致：行数优先、1MB 兜底，
+  // 否则大帧顶在前面时读不到任何 cwd 帧 → 假「不一致」
+  const head = readHeadLines(file, 120, 1024 * 1024);
   const cwdRe = /"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"/;
   for (const line of head) {
     const m = cwdRe.exec(line);
@@ -92,13 +93,26 @@ export function verifySessionIdentity(
   return { ok: false, reason: '转写帧内 cwd 与登记工作区不一致' };
 }
 
-function readHeadLines(file: string, n: number): string[] {
+/**
+ * 只读文件头部：按行数为主、字节为兜底上限，分块读避免一次分配。
+ * 窗口必须够宽——真实转写前面常有几百 KB 的大帧（图片 base64 等），
+ * 64KB 只能盖到两三行 queue-operation，cwd 帧会被整个错过（登记核验假阴性事故）。
+ * 身份核验与最近会话发现共用。
+ */
+export function readHeadLines(file: string, maxLines: number, maxBytes: number): string[] {
   const fd = fs.openSync(file, 'r');
   try {
+    const parts: Buffer[] = [];
+    let total = 0;
     const buf = Buffer.alloc(64 * 1024);
-    const read = fs.readSync(fd, buf, 0, buf.length, 0);
-    const text = buf.subarray(0, read).toString('utf8');
-    return text.split('\n').slice(0, n);
+    while (total < maxBytes) {
+      const read = fs.readSync(fd, buf, 0, Math.min(buf.length, maxBytes - total), null);
+      if (read <= 0) break;
+      total += read;
+      parts.push(Buffer.from(buf.subarray(0, read)));
+      if (read < buf.length) break; // EOF
+    }
+    return Buffer.concat(parts).toString('utf8').split('\n').slice(0, maxLines);
   } finally {
     fs.closeSync(fd);
   }

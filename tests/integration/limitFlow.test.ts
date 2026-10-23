@@ -13,6 +13,8 @@ import { hasLineage, readTranscriptEntries } from '../../apps/server/src/modules
 
 let env: TestEnv;
 let fixture: WorkspaceFixture;
+/** 去重测试要与「未启用」测试同窗：跨秒边界重算墙串会翻车，必须复用同一串。 */
+let plusOneHourWall: string;
 
 before(() => {
   env = makeTestEnv();
@@ -59,10 +61,11 @@ test('转写 cwd 与工作区不符 → SESSION_IDENTITY_UNVERIFIED', () => {
 });
 
 test('未启用会话：事件落库但不建任务（§5.2）', () => {
+  plusOneHourWall = wallClockAhead(3600_000);
   const outcome = env.ctx.services.intake.handleTranscriptFrame(
     fixture.sessionId,
     fixture.projectPath,
-    limitFrame(fixture, wallClockAhead(3600_000)),
+    limitFrame(fixture, plusOneHourWall),
   );
   assert.equal(outcome.recorded, true);
   assert.equal(outcome.taskCreated, false);
@@ -96,7 +99,7 @@ test('同窗口重复帧 → 哈希去重，不重复建任务（§7.3）', () =
   const outcome = env.ctx.services.intake.handleTranscriptFrame(
     fixture.sessionId,
     fixture.projectPath,
-    limitFrame(fixture, wallClockAhead(3600_000), 'req_retry_storm'),
+    limitFrame(fixture, plusOneHourWall, 'req_retry_storm'),
   );
   assert.equal(outcome.recorded, false);
   assert.equal(outcome.reason, 'duplicate');

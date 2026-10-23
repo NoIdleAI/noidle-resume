@@ -79,6 +79,18 @@ if (mode === 'error') {
   process.stderr.write('fake-claude: 模拟引擎故障\n');
   process.exit(2);
 }
+if (process.env.CAR_FAKE_NOWRITE === '1') {
+  // 只读演练模式：转写根指向真实 ~/.claude/projects 时用——
+  // 输出成功结果但绝不向转写落任何帧，叶核验会诚实失败（RESUME_RESULT_UNKNOWN）。
+  out({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: '（演练模式：未落盘）',
+    session_id: sid,
+  });
+  process.exit(0);
+}
 
 // ok：模拟一次真实续跑轮落盘
 const entries = readEntries();

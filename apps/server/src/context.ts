@@ -15,6 +15,7 @@ import { AuditService } from './modules/audit/auditService.ts';
 import { TaskService } from './modules/tasks/taskService.ts';
 import { UsageLimitIntake } from './modules/usage-limit/intake.ts';
 import { SessionService } from './modules/sessions/sessionService.ts';
+import { DiscoveryService } from './modules/discover/discoveryService.ts';
 import { ProjectsWatcher } from './modules/watcher/projectsWatcher.ts';
 import { ClaudeResumeRunner, type ResumeRunner } from './modules/resume/runner.ts';
 import { ResumeScheduler } from './modules/scheduler/scheduler.ts';
@@ -39,6 +40,7 @@ export interface AppContext {
   };
   services: {
     sessions: SessionService;
+    discover: DiscoveryService;
     tasks: TaskService;
     intake: UsageLimitIntake;
     scheduler: ResumeScheduler;
@@ -100,6 +102,10 @@ export function buildContext(config: AppConfig, opts?: { env?: string }): AppCon
     projectsRoot: config.projectsRoot,
     watcher,
   });
+  const discover = new DiscoveryService({
+    sessions: repos.sessions,
+    projectsRoot: config.projectsRoot,
+  });
   const runner = new ClaudeResumeRunner({
     claudeBin: config.claudeBin,
     projectsRoot: config.projectsRoot,
@@ -129,6 +135,7 @@ export function buildContext(config: AppConfig, opts?: { env?: string }): AppCon
     repos,
     services: {
       sessions,
+      discover,
       tasks,
       intake,
       scheduler,

@@ -67,8 +67,11 @@ export class TaskService {
       if (!active) throw new BizError('INTERNAL_ERROR', '任务创建失败且无活动任务', 500);
       return { task: active, created: false };
     }
-    this.notify(row);
-    return { task: row, created: true };
+    // notify 走 byId（带会话 display_name 的 join 行）：裸行不出门，
+    // 否则 WS 推送的 DTO 会用 sessionId 冒充展示名并盖掉列表刷新
+    const joined = this.deps.tasks.byId(row.id);
+    if (joined) this.notify(joined);
+    return { task: joined ?? row, created: true };
   }
 
   byId(id: string): ResumeTaskRow {
@@ -81,15 +84,33 @@ export class TaskService {
     return this.deps.tasks.list(limit, offset);
   }
 
-  /** 用户取消：waiting/checking 可立即取消；recovering 只置取消标记（§5.2）。 */
+  /** 用户取消：waiting/checking 立即取消；recovering 只置标记；paused/failed 搁置归档（§5.2）。 */
   cancel(taskId: string): ResumeTaskRow {
     const now = this.deps.clock.now().toISOString();
     const task = this.byId(taskId);
     this.deps.tasks.requestCancel(taskId, now);
     this.deps.tasks.cancelPending(taskId, now);
+    if (task.status === 'paused' || task.status === 'failed') {
+      this.deps.tasks.cancelSettled(taskId, now);
+    }
     const after = this.byId(taskId);
     this.notify(after);
-    return after.status === task.status ? after : after;
+    return after;
+  }
+
+  /** 用户暂停单个未开始的恢复任务（§10.1 任务卡操作）。 */
+  pause(taskId: string): ResumeTaskRow {
+    const now = this.deps.clock.now().toISOString();
+    const task = this.byId(taskId);
+    if (task.status !== 'waiting') {
+      throw new BizError('TASK_NOT_RETRYABLE', `状态 ${task.status} 不可暂停`, 409);
+    }
+    if (!this.deps.tasks.pauseFromWaiting(taskId, 'PAUSED_BY_USER', now)) {
+      throw new BizError('TASK_NOT_RETRYABLE', '暂停失败：状态已变化', 409);
+    }
+    const after = this.byId(taskId);
+    this.notify(after);
+    return after;
   }
 
   /** 手动重试：重新走全链核验（§5.2），attempts 保留防无限循环。 */

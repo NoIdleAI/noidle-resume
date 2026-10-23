@@ -166,6 +166,20 @@ export interface WsEvent<T = unknown> {
   payload: T;
 }
 
+/** 最近会话发现（扫描转写根，供登记下拉选择；纯扫描结果，不入库）。 */
+export interface DiscoveredSessionDto {
+  sessionId: string;
+  /** 取自转写帧内 cwd（realpath 归一），与登记核验同源。 */
+  projectPath: string;
+  /** 取自 summary 帧或首条用户消息，仅作展示名建议。 */
+  suggestedName: string | null;
+  /** 转写文件 mtime（最后活动时刻）。 */
+  lastActiveAt: string;
+  sizeBytes: number;
+  /** 已在白名单（同 sessionId 且工作区 realpath 一致）。 */
+  registered: boolean;
+}
+
 /** API 请求/响应荷载。 */
 export interface AddSessionRequest {
   provider?: Provider;

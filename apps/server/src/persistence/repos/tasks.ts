@@ -60,6 +60,7 @@ export class TasksRepo {
   private stmtCancelPending;
   private stmtRetry;
   private stmtPauseFromWaiting;
+  private stmtCancelSettled;
   private stmtCheckingToWaiting;
 
   constructor(private db: Db) {
@@ -71,15 +72,21 @@ export class TasksRepo {
          (@id, @sessionRowId, @sessionId, @projectPath, @usageEventId, @status,
           @scheduledAt, @createdAt, @createdAt)`,
     );
-    this.stmtById = db.prepare('SELECT * FROM resume_tasks WHERE id = ?');
+    // 读路径统一带出会话 display_name / enabled（DTO 需要；notify 也走这些语句）
+    this.stmtById = db.prepare(
+      `SELECT t.*, s.display_name, s.enabled
+       FROM resume_tasks t JOIN sessions s ON s.id = t.session_row_id
+       WHERE t.id = ?`,
+    );
     this.stmtList = db.prepare(
       `SELECT t.*, s.display_name, s.enabled
        FROM resume_tasks t JOIN sessions s ON s.id = t.session_row_id
        ORDER BY t.created_at DESC LIMIT @limit OFFSET @offset`,
     );
     this.stmtActiveBySessionRow = db.prepare(
-      `SELECT * FROM resume_tasks
-       WHERE session_row_id = ? AND status IN ('waiting','checking','recovering')`,
+      `SELECT t.*, s.display_name, s.enabled
+       FROM resume_tasks t JOIN sessions s ON s.id = t.session_row_id
+       WHERE t.session_row_id = ? AND t.status IN ('waiting','checking','recovering')`,
     );
     this.stmtDue = db.prepare(
       `SELECT t.*, s.display_name, s.enabled
@@ -141,6 +148,11 @@ export class TasksRepo {
       `UPDATE resume_tasks SET status = 'paused', last_error_code = @code,
          finished_at = @at, updated_at = @at
        WHERE id = @id AND status = 'waiting'`,
+    );
+    this.stmtCancelSettled = db.prepare(
+      `UPDATE resume_tasks SET status = 'cancelled', cancel_requested = 1,
+         finished_at = @at, updated_at = @at
+       WHERE id = @id AND status IN ('paused','failed')`,
     );
     this.stmtCheckingToWaiting = db.prepare(
       `UPDATE resume_tasks SET status = 'waiting', updated_at = @at
@@ -288,6 +300,11 @@ export class TasksRepo {
   /** waiting/checking → cancelled；recovering 不可同步取消（§5.2）。 */
   cancelPending(id: string, at: string): boolean {
     return this.stmtCancelPending.run({ id, at }).changes === 1;
+  }
+
+  /** paused/failed → cancelled（用户搁置滞留任务；resumed 是事实，不可取消）。 */
+  cancelSettled(id: string, at: string): boolean {
+    return this.stmtCancelSettled.run({ id, at }).changes === 1;
   }
 
   /** paused/failed → waiting（手动重试，重新走全链核验，§5.2）。 */
