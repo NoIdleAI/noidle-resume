@@ -13,7 +13,7 @@ import TokenGate from './pages/TokenGate.vue';
 
   <div v-else class="wrap">
     <header class="top">
-      <div class="brand"><span class="mark">R</span>Auto Resume<span class="for">for Claude Code</span></div>
+      <div class="brand"><span class="mark">N</span>NoIdle Resume<span class="for">for Claude Code</span></div>
       <nav class="nav">
         <router-link to="/">总览</router-link>
         <router-link to="/sessions">会话</router-link>
