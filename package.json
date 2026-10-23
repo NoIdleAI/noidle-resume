@@ -1,0 +1,25 @@
+{
+  "name": "noidle-auto-resume",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GLM 5 小时限额后自动续跑 VS Code 侧边栏 Claude Code 会话的本地工具（设计书：限额恢复设计方案01.md）",
+  "type": "module",
+  "workspaces": [
+    "apps/server",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @noidle/auto-resume-server",
+    "start": "npm run start -w @noidle/auto-resume-server",
+    "typecheck": "tsc -p packages/contracts --noEmit && tsc -p apps/server --noEmit",
+    "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
