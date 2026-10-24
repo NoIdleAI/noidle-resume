@@ -1,9 +1,10 @@
-import { loadConfig } from './config.ts';
+import { importLegacyDataDir, loadConfig } from './config.ts';
 import { buildContext } from './context.ts';
 import { buildApp } from './api/app.ts';
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  importLegacyDataDir(config.dataDir);
   const ctx = buildContext(config);
   const { services } = ctx;
 

@@ -19,6 +19,7 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "playwright-core": "^1.64.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

@@ -12,8 +12,9 @@ import { registerWsGateway } from './ws.ts';
 import { registerRoutes } from './routes.ts';
 import { BizError } from '../shared/errors.ts';
 
-/** 前端构建产物目录（存在才托管，开发态可只用 vite dev server）。 */
+/** 前端构建产物目录（存在才托管，开发态可只用 vite dev server；打包态由 CAR_DIST_DIR 指定）。 */
 export function webDistDir(): string {
+  if (process.env.CAR_DIST_DIR) return process.env.CAR_DIST_DIR;
   // apps/server/src/api/app.ts → 仓库根/apps/web/dist
   return path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),

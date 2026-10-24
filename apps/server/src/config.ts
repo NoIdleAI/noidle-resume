@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -35,4 +36,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 function defaultMigrationsDir(): string {
   // src/config.ts → apps/server/src → 仓库根/migrations
   return new URL('../../../migrations/', import.meta.url).pathname;
+}
+
+/**
+ * 旧版数据目录 noidle-auto-resume → noidle-resume 一次性搬迁：
+ * 新目录还没有库而旧目录有，则拷贝（库 + WAL + 令牌），原目录保留不动。
+ */
+export function importLegacyDataDir(dataDir: string, env: NodeJS.ProcessEnv = process.env): void {
+  if (env.CAR_DATA_DIR) return; // 显式指定数据目录的不掺和
+  const legacyDir = path.join(
+    os.homedir(),
+    'Library',
+    'Application Support',
+    'noidle-auto-resume',
+  );
+  if (fs.existsSync(path.join(dataDir, 'car.db'))) return;
+  if (!fs.existsSync(path.join(legacyDir, 'car.db'))) return;
+  fs.mkdirSync(dataDir, { recursive: true });
+  for (const f of ['car.db', 'car.db-wal', 'car.db-shm', 'token.txt']) {
+    const from = path.join(legacyDir, f);
+    if (fs.existsSync(from)) fs.copyFileSync(from, path.join(dataDir, f));
+  }
 }

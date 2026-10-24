@@ -1,0 +1,25 @@
+[package]
+name = "noidle-resume-desktop"
+version = "0.1.0"
+description = "NoIdle Resume 托盘壳：拉起本地 sidecar 服务并常驻菜单栏"
+edition = "2021"
+
+[lib]
+name = "noidle_resume_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-clipboard-manager = "2"
+signal-hook = "0.3"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

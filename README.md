@@ -1,4 +1,4 @@
-# NoIdle Auto Resume
+# NoIdle Resume
 
 GLM Coding Plan 5 小时限额到点后，自动续跑 VS Code 侧边栏 Claude Code 会话的**本地独立小工具**。
 
@@ -37,6 +37,23 @@ npm run typecheck
 ```
 
 启动后控制台打印本机访问令牌（也存于数据目录 `token.txt`，0600）。浏览器打开 `http://127.0.0.1:7842`，粘贴令牌进入值守台。
+
+## Mac 应用（Tauri 托盘壳）
+
+无原生模块的本地服务编译为单文件 sidecar（bun），Tauri v2 壳负责菜单栏常驻、拉起/收割服务、开机自启：
+
+```bash
+brew install rust bun                 # 构建工具链
+npm install
+npm run build                         # 前端 dist（sidecar 与 .app 共用）
+node scripts/gen-icon.mjs             # 生成图标源图（品牌橙底黑 N）
+cd apps/desktop && npx tauri build    # 产出 .app + .dmg
+```
+
+产物：`apps/desktop/src-tauri/target/release/bundle/{macos,dmg}/`。
+托盘菜单：打开管理页 / 复制访问令牌 / 登录时启动 / 退出；纯菜单栏应用（不占 Dock）。
+数据目录与服务端一致（`~/Library/Application Support/noidle-resume`）；sidecar 随壳退出被收割，无孤儿进程。
+注意：使用 .app 时请关闭开发态服务（`npm run dev`），避免两个调度器共用同一数据库。
 
 环境变量：`CAR_DATA_DIR`（数据目录）、`CAR_PROJECTS_ROOT`（转写根，默认 `~/.claude/projects`）、`CAR_CLAUDE_BIN`、`CAR_HOST`、`CAR_PORT`。
 
