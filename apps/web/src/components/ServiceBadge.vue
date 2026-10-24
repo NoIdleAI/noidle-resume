@@ -2,16 +2,13 @@
 import { computed } from 'vue';
 import { store } from '../stores/data';
 
-const text = computed(() => {
-  if (!store.connected || !store.health?.ok) return '连接中断';
-  return '服务运行中';
-});
-const addr = computed(() => location.host);
+const ok = computed(() => store.connected && !!store.health?.ok);
+const text = computed(() => (ok.value ? '服务运行中' : '连接中断'));
 </script>
 
 <template>
-  <div class="svc">
-    <span class="dot" :class="{ off: !store.connected || !store.health?.ok }"></span>
-    {{ text }}<span class="addr">{{ addr }}</span>
+  <div class="svc-mini">
+    <span class="dot" :class="{ off: !ok }"></span>
+    {{ text }}
   </div>
 </template>
