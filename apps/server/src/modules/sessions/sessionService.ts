@@ -213,10 +213,11 @@ export class SessionService {
       const entry = entries[i];
       if (!entry) continue;
       // 只认 API 真实返回的限额帧：system/api_error 或 CLI 标记的 API 错误轮次；
-      // 用户在会话里手打/粘贴的限额字样不算证据
+      // 用户在会话里手打/粘贴的限额字样不算证据（isApiErrorMessage 在原始 JSON 行上，
+      // readTranscriptEntries 把整行挂在 entry.raw）
+      const raw = entry.raw as { isApiErrorMessage?: unknown } | undefined;
       const isApiErrorFrame =
-        entry.type === 'system' ||
-        (entry as { isApiErrorMessage?: unknown }).isApiErrorMessage === true;
+        entry.type === 'system' || raw?.isApiErrorMessage === true;
       if (!isApiErrorFrame) continue;
       const text = frameText(entry);
       if (!text) continue;

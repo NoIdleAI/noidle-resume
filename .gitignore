@@ -8,3 +8,7 @@ apps/desktop/src-tauri/binaries/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 apps/desktop/icon-source.png
+
+# ZCode 工作区元数据与 bun 编译缓存
+.zcode/
+*.bun-build

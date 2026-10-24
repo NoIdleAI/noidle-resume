@@ -36,6 +36,13 @@ fs.writeFileSync(
 const sessionId = `e2e-${Date.now().toString(36)}`;
 const projectPath = path.join(projectsRoot, 'workspaces', 'ws-e2e');
 fs.mkdirSync(projectPath, { recursive: true });
+// 限额重置时刻：上海墙上钟（服务端默认时区 Asia/Shanghai）。
+// 取 +30 秒：登记即建任务（加入即建任务语义），要盖过门→登记→下拉全程的耗时；
+// 补录步骤随后幂等命中（TASK_ALREADY_ACTIVE），调度器在 +30s 触发续跑
+const limitResetWall = new Date(Date.now() + 30_000 + 8 * 3600_000)
+  .toISOString()
+  .replace('T', ' ')
+  .slice(0, 19);
 const encoded = projectPath.replace(/[^A-Za-z0-9]/g, '-');
 const transcriptDir = path.join(projectsRoot, encoded);
 fs.mkdirSync(transcriptDir, { recursive: true });
@@ -54,6 +61,17 @@ fs.writeFileSync(
     JSON.stringify({
       type: 'assistant', uuid: baseLeaf, parentUuid: 'e2e-u1',
       message: { role: 'assistant', content: [{ type: 'text', text: '初始回答' }] },
+      sessionId, cwd: projectPath, timestamp: new Date().toISOString(),
+    }),
+    // 2026-10-24 起加入校验要求转写里有真实限额帧（429+1308），夹具补一帧 API 错误轮次。
+    // 不带 uuid：不改变叶血统（最新叶必须仍是 baseLeaf，续跑 user 帧才能认父成功）
+    JSON.stringify({
+      type: 'assistant',
+      isApiErrorMessage: true,
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: `API Error: 429 智谱错误码 1308 — 限额将在 ${limitResetWall} 重置` }],
+      },
       sessionId, cwd: projectPath, timestamp: new Date().toISOString(),
     }),
   ].join('\n') + '\n',
@@ -109,12 +127,12 @@ try {
   console.log('② 错误令牌被拒 ✓');
   await page.fill('input[type="password"]', token);
   await page.click('button:has-text("进入值守台")');
-  await page.waitForSelector('header.top', { timeout: 8000 });
+  await page.waitForSelector('.side .brand', { timeout: 8000 });
   console.log('③ 正确令牌进入 ✓');
   await page.screenshot({ path: `${SHOTS}/02-dashboard-empty.png`, fullPage: true });
 
   // ③ 登记会话（走「最近会话发现」自绘下拉）→ 启用
-  await page.click('nav.nav >> text=会话');
+  await page.click('.side .side-item:has-text("会话")');
   // 等扫描完成：触发钮文案出现「发现」
   await page.waitForFunction(
     () => (document.querySelector('.pick-trigger')?.textContent ?? '').includes('发现'),
@@ -125,6 +143,8 @@ try {
   await page.waitForSelector('.pick-item', { timeout: 5000 });
   // 夹具转写无 ai-title/summary → 建议名 = 首条用户消息
   await page.click('.pick-item:has-text("E2E 初始问题")');
+  // 手填字段默认折叠：展开才能读到自动填充结果
+  await page.click('button:has-text("手动填写")');
   const sidFilled = await page.inputValue('input[placeholder="claude 会话 UUID"]');
   if (sidFilled !== sessionId) throw new Error('下拉选择未自动填充 sessionId');
   const ppFilled = await page.inputValue('input[placeholder="/Users/you/WorkSpace/my-app"]');
@@ -132,12 +152,19 @@ try {
   await page.fill('input[placeholder="后端接口开发"]', 'E2E 值守会话');
   await page.screenshot({ path: `${SHOTS}/03-sessions-form.png`, fullPage: true });
   console.log('④ 最近会话下拉 → 自动填充 ✓');
-  await page.click('button:has-text("登记并核验身份")');
+  // 诊断：登记请求的响应码与错误体
+  page.on('response', (res) => {
+    if (res.url().includes('/api/v1/sessions') && res.request().method() === 'POST' && res.status() >= 400) {
+      res.text().then((t) => console.log(`  [add ${res.status()}]`, t)).catch(() => {});
+    }
+  });
+  await page.click('button:has-text("加入自动化列表")');
   await page.waitForSelector('.form-ok', { timeout: 8000 });
   console.log('⑤ 加入自动化列表 ✓');
   await page.waitForSelector('.list .row', { timeout: 8000 });
   const rowText = await page.locator('.list .row').first().innerText();
-  if (!rowText.includes('监控中')) throw new Error('列表行未显示监控中（加列表即守护语义失效）');
+  // 2026-10-24 起行内只给重置时刻+倒计时（不贴「监控中」状态字样）
+  if (!rowText.includes('重置')) throw new Error('列表行未显示自动重置时刻');
   await page.screenshot({ path: `${SHOTS}/04-sessions-enabled.png`, fullPage: true });
   console.log('⑥ 自动化列表就绪（加列表即守护，无开关）✓');
 
@@ -167,7 +194,7 @@ try {
   await page.waitForSelector('.overlay', { state: 'detached', timeout: 5000 });
 
   // ⑤ 总览主任务卡 → 等到已恢复
-  await page.click('nav.nav >> text=总览');
+  await page.click('.side .side-item:has-text("总览")');
   await page.waitForSelector('.hero', { timeout: 8000 });
   await page.screenshot({ path: `${SHOTS}/06-hero-waiting.png`, fullPage: true });
   const heroText = await page.locator('.hero').innerText();
@@ -175,18 +202,17 @@ try {
   if (!heroText.includes('429') || !heroText.includes('1308')) throw new Error('主任务卡缺证据标签');
   console.log('⑧ 主任务卡（倒计时/窗口/证据/时间线）✓');
 
-  await page.waitForFunction(
-    () => document.querySelector('.hero .chip')?.textContent?.includes('已恢复'),
-    undefined,
-    { timeout: 40000, polling: 500 },
-  );
-  console.log('⑨ 调度 → 续跑 → 叶核验 → 已恢复 ✓');
-  await page.screenshot({ path: `${SHOTS}/07-hero-resumed.png`, fullPage: true });
+  // 2026-10-24 起：恢复完结即归档——会话自动移除、任务进历史记录，主卡随之退场。
+  // 等历史记录行出现「恢复成功」，再从历史行进详情页核验。
+  await page.click('button:has-text("历史记录")');
+  await page.waitForSelector('.list .row:has-text("恢复成功")', { timeout: 60000 });
+  console.log('⑨ 调度 → 续跑 → 叶核验 → 恢复成功（归档历史）✓');
+  await page.screenshot({ path: `${SHOTS}/07-history-resumed.png`, fullPage: true });
 
   // ⑥ 详情页
-  await page.click('.hero button:has-text("详情")');
+  await page.click('.list .row:has-text("恢复成功")');
   await page.waitForSelector('.subcard', { timeout: 8000 });
-  const detailText = await page.locator('.hero').innerText();
+  const detailText = await page.locator('body').innerText();
   if (!detailText.includes('恢复成功')) throw new Error('详情页缺「恢复成功」解读');
   if (!detailText.includes('verifiedLeaf') || !detailText.includes('baseLeaf')) {
     throw new Error('详情页缺叶信息');
@@ -195,7 +221,7 @@ try {
   console.log('⑩ 任务详情（六问齐全）✓');
 
   // ⑦ 设置页保存
-  await page.click('nav.nav >> text=设置');
+  await page.click('.side .side-item:has-text("设置")');
   await page.waitForSelector('button:has-text("保存")', { timeout: 8000 });
   const maxInput = page.locator('.field input[type="number"]').first();
   await maxInput.fill('4');
