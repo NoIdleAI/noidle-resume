@@ -33,6 +33,7 @@ export function buildTimeline(
   }
 
   // 到期核验：waiting=即将（next）；checking=进行中；之后为 done
+  // （取消也算走到过：只要尝试过就有 done 投影，避免「尝试 1/5」与时间线互相矛盾）
   const checkingDone =
     task.status === 'recovering' ||
     task.status === 'resumed' ||
@@ -56,11 +57,15 @@ export function buildTimeline(
     s3 = { t: '—', n: '续跑原会话', state: 'idle' };
   }
 
-  // 叶落盘核验
+  // 叶落盘核验：红 = 恢复尝试以「结果未知」终局（未自动重发，需人看一眼）。
+  // 已取消的任务不再冒红——它不是失败，是用户叫停（取消后 lastErrorCode 会残留）
   let s4: TimelineStep;
   if (task.status === 'resumed') {
     s4 = { t: at(task.updatedAt), n: '叶落盘核验', state: 'done' };
-  } else if (task.lastErrorCode === 'RESUME_RESULT_UNKNOWN') {
+  } else if (
+    (task.status === 'failed' || task.status === 'paused') &&
+    task.lastErrorCode === 'RESUME_RESULT_UNKNOWN'
+  ) {
     s4 = { t: at(task.lastAttemptAt), n: '叶落盘核验', state: 'bad' };
   } else {
     s4 = { t: '—', n: '叶落盘核验', state: 'idle' };

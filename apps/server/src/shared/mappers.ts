@@ -49,8 +49,7 @@ export function toTaskDto(row: ResumeTaskRow | TaskWithSessionRow): ResumeTaskDt
   return {
     id: row.id,
     sessionId: row.session_id,
-    sessionDisplayName:
-      'display_name' in row ? row.display_name : row.session_id,
+    sessionDisplayName: row.display_name ?? row.session_id,
     projectPath: row.project_path,
     usageEventId: row.usage_event_id,
     status: row.status as TaskStatus,

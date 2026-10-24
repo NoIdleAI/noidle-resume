@@ -2,6 +2,7 @@ import type {
   AddSessionRequest,
   AuditLogDto,
   DiscoveredSessionDto,
+  LimitParseDto,
   ManualUsageLimitRequest,
   PatchSessionRequest,
   ResumeTaskDto,
@@ -101,17 +102,15 @@ export const api = {
       `/api/v1/discover/sessions?hours=${hours}`,
     ),
 
+  // ---- 限额提示原文解析（补录对话框粘贴自动填充） ----
+  parseLimit: (rawMessage: string) =>
+    request<LimitParseDto>('POST', '/api/v1/parse-limit', { rawMessage }),
+
   // ---- 任务 ----
   tasks: (limit = 100) =>
     request<{ tasks: ResumeTaskDto[] }>('GET', `/api/v1/tasks?limit=${limit}`),
+  clearHistory: () => request<{ cleared: number }>('DELETE', `/api/v1/tasks/history`),
   task: (id: string) => request<{ task: ResumeTaskDto }>('GET', `/api/v1/tasks/${id}`),
-  retryTask: (id: string) =>
-    request<{ task: ResumeTaskDto }>('POST', `/api/v1/tasks/${id}/retry`),
-  cancelTask: (id: string) =>
-    request<{ task: ResumeTaskDto }>('POST', `/api/v1/tasks/${id}/cancel`),
-  pauseTask: (id: string) =>
-    request<{ task: ResumeTaskDto }>('POST', `/api/v1/tasks/${id}/pause`),
-  pauseAllTasks: () => request<{ paused: number }>('POST', '/api/v1/tasks/pause-all'),
 
   // ---- 事件 ----
   events: (limit = 100) =>
@@ -124,7 +123,7 @@ export const api = {
     ),
 
   // ---- 日志与设置 ----
-  logs: (limit = 200) => request<{ logs: AuditLogDto[] }>('GET', `/api/v1/logs?limit=${limit}`),
+  logs: (limit = 100) => request<{ logs: AuditLogDto[] }>('GET', `/api/v1/logs?limit=${limit}`),
   settings: () => request<{ settings: SettingsDto }>('GET', '/api/v1/settings'),
   patchSettings: (body: Partial<SettingsDto>) =>
     request<{ settings: SettingsDto }>('PATCH', '/api/v1/settings', body),

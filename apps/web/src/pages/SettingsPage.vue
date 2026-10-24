@@ -17,6 +17,7 @@ const form = reactive({
   resumeTimeoutMin: settings.value.resumeAttemptTimeoutMs / 60_000,
   concurrency: settings.value.concurrency,
   resumePromptTemplate: settings.value.resumePromptTemplate,
+  autoResend: settings.value.autoResend,
 });
 let loadedFor = store.settings?.timezone;
 // settings 异步到达后回填一次
@@ -30,6 +31,7 @@ void Promise.resolve().then(() => {
     form.resumeTimeoutMin = store.settings.resumeAttemptTimeoutMs / 60_000;
     form.concurrency = store.settings.concurrency;
     form.resumePromptTemplate = store.settings.resumePromptTemplate;
+    form.autoResend = store.settings.autoResend;
   }
 });
 
@@ -60,6 +62,7 @@ async function onSave(): Promise<void> {
       resumeAttemptTimeoutMs: Math.max(10_000, Math.round(form.resumeTimeoutMin * 60_000)),
       concurrency: Math.min(3, Math.max(1, Math.floor(form.concurrency))),
       resumePromptTemplate: form.resumePromptTemplate,
+      autoResend: form.autoResend,
     });
     await refreshSettings();
     saveOk.value = '已保存（立即生效）';
@@ -86,6 +89,16 @@ async function reloadLogs(): Promise<void> {
     <h3>恢复策略</h3>
     <div v-if="saveError" class="form-error">{{ saveError }}</div>
     <div v-if="saveOk" class="form-ok">{{ saveOk }}</div>
+    <div class="field" style="margin-bottom: 16px">
+      <label class="autoresend">
+        <input v-model="form.autoResend" type="checkbox" />
+        <span>自动化重发 — 恢复结果未知/失败时按退避间隔自动重发</span>
+      </label>
+      <div class="note">
+        开启（推荐）：无人值守全自动，最多尝试「最大尝试次数」次后如实报告失败。
+        关闭：结果未知一次即终止，绝不重发（防重复投喂保守模式）。
+      </div>
+    </div>
     <div class="form-grid">
       <div class="field">
         <label>时区（重置时刻的墙上钟按此解释）</label>
@@ -97,7 +110,7 @@ async function reloadLogs(): Promise<void> {
       <div class="field">
         <label>最大尝试次数</label>
         <input v-model.number="form.maxAttempts" type="number" min="1" max="20" />
-        <div class="note">超过后任务转 failed（保留现场，可手动重试）</div>
+        <div class="note">超过后任务转 failed 如实报告；重新守护到会话页补录</div>
       </div>
       <div class="field">
         <label>退避基数（秒）</label>

@@ -1,5 +1,4 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { transcriptPath } from '../../adapters/vscode-claude/transcriptLocator.ts';
 import {
   findUserEntryByContent,
@@ -9,8 +8,6 @@ import {
 } from './transcript.ts';
 import { assertCold, type ColdCheckResult } from './coldGuard.ts';
 import { redact } from '../../shared/redact.ts';
-
-const execFileAsync = promisify(execFile);
 
 export type ResumeAttemptKind = 'ok' | 'still-limited' | 'error' | 'timeout';
 
@@ -25,6 +22,8 @@ export interface ResumeVerificationResult {
   status: 'verified' | 'pending' | 'unknown';
   leafUuid?: string;
   ourTurnUuid?: string;
+  /** 落盘叶的文本内容：调度方据此识别「落盘的其实是 429 仍受限轮次」。 */
+  leafText?: string;
   reason?: string;
 }
 
@@ -49,6 +48,56 @@ export interface RunnerOptions {
 
 const STILL_LIMITED_RE = /429|1308|usage limit|使用上限|重置/i;
 const MAX_BUFFER = 16 * 1024 * 1024;
+
+interface SpawnOutcome {
+  stdout: string;
+  stderr: string;
+  code: number | null;
+  killed: boolean;
+}
+
+/**
+ * 硬结算执行：不管子进程怎么退场都保证落定。
+ * 教训（2026-10-24 真机）：CLI 答完轮次后可能因 MCP 子进程等攥住 stdio 不退场，
+ * execFile 的 Promise 会永远悬着 → 任务卡 recovering。这里 SIGTERM→SIGKILL→兜底强制结算，
+ * 且轮次是否真的落盘以转写核验为准（调度层），进程结局只作归类参考。
+ */
+function execHardSettled(
+  bin: string,
+  args: string[],
+  opts: { cwd: string; timeoutMs: number; maxBuffer: number },
+): Promise<SpawnOutcome> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let killed = false;
+    let stdout = '';
+    let stderr = '';
+    const child = spawn(bin, args, { cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    child.stdout?.on('data', (b: Buffer) => {
+      if (stdout.length < opts.maxBuffer) stdout += b;
+    });
+    child.stderr?.on('data', (b: Buffer) => {
+      if (stderr.length < opts.maxBuffer) stderr += b;
+    });
+    const done = (code: number | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(termTimer);
+      clearTimeout(bottomTimer);
+      resolve({ stdout, stderr, code, killed });
+    };
+    const termTimer = setTimeout(() => {
+      killed = true;
+      child.kill('SIGTERM');
+      setTimeout(() => child.kill('SIGKILL'), 5_000).unref?.();
+    }, opts.timeoutMs);
+    // 兜底：close 迟迟不来（孙进程攥管道）也必须在超时后强制结算
+    const bottomTimer = setTimeout(() => done(killed ? -1 : null), opts.timeoutMs + 8_000);
+    bottomTimer.unref?.();
+    child.on('close', (code) => done(code));
+    child.on('error', () => done(-1));
+  });
+}
 
 /**
  * headless CLI 续跑引擎（2026-10-23 探针定案，设计书 §2.3）：
@@ -82,35 +131,24 @@ export class ClaudeResumeRunner implements ResumeRunner {
       '--permission-mode',
       'default',
     ];
-    try {
-      const { stdout } = await execFileAsync(this.opts.claudeBin, args, {
-        cwd: projectPath,
-        timeout: timeoutMs,
-        maxBuffer: MAX_BUFFER,
-      });
-      return classifyResult(stdout, sessionId);
-    } catch (err) {
-      const e = err as {
-        killed?: boolean;
-        stdout?: string;
-        stderr?: string;
-        message?: string;
-      };
-      if (e.killed) {
-        return { kind: 'timeout', message: `续跑超时(${timeoutMs}ms)被终止` };
-      }
-      // 进程非零退出但 stdout 仍可能有结果 JSON（如额度未恢复时的 is_error 结果）
-      const combined = `${e.stdout ?? ''}`;
-      if (combined.trim()) {
-        const classified = classifyResult(combined, sessionId);
-        if (classified.kind === 'ok') return classified;
-        return classified;
-      }
-      return {
-        kind: 'error',
-        message: redact(`${e.message ?? String(err)} ${e.stderr ?? ''}`),
-      };
+    const out = await execHardSettled(this.opts.claudeBin, args, {
+      cwd: projectPath,
+      timeoutMs,
+      maxBuffer: MAX_BUFFER,
+    });
+    // stdout 有结果 JSON 就以它归类（SIGTERM 前结果已打印 = 轮次已完成）
+    if (out.stdout.trim()) {
+      const classified = classifyResult(out.stdout, sessionId);
+      if (classified.kind !== 'error' || !out.killed) return classified;
+      // 进程被杀且输出解析不出结果 → 按超时算
     }
+    if (out.killed) {
+      return { kind: 'timeout', message: `续跑超时(${timeoutMs}ms)被终止` };
+    }
+    return {
+      kind: 'error',
+      message: redact(`退出码 ${out.code} ${out.stderr.slice(0, 300)}`),
+    };
   }
 
   async verifyResumeLeaf(
@@ -143,8 +181,26 @@ export class ClaudeResumeRunner implements ResumeRunner {
 
     // ③ 后代叶即本工具分支的最新落盘叶
     const leaf = newestDescendantLeaf(entries, ourTurn.uuid) ?? ourTurn.uuid;
-    return { status: 'verified', leafUuid: leaf, ourTurnUuid: ourTurn.uuid };
+    return {
+      status: 'verified',
+      leafUuid: leaf,
+      ourTurnUuid: ourTurn.uuid,
+      leafText: entryText(entries.find((e) => e.uuid === leaf)),
+    };
   }
+}
+
+/** 抽取转写帧的文本内容（字符串或 content 块数组）。 */
+function entryText(entry: { message?: { content?: string | Array<{ type?: string; text?: string }> } } | undefined): string | undefined {
+  const c = entry?.message?.content;
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) {
+    return c
+      .map((b) => (typeof b.text === 'string' ? b.text : ''))
+      .filter(Boolean)
+      .join('\n');
+  }
+  return undefined;
 }
 
 interface ClaudeResultJson {

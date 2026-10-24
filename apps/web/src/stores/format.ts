@@ -79,6 +79,11 @@ export function remainParts(targetIso: string, nowMs: number): RemainParts | nul
 
 /** 「now」在指定时区的墙上钟（datetime-local 预填用）：YYYY-MM-DDTHH:mm。 */
 export function nowWallInTz(tz: string, atMs = Date.now()): string {
+  return isoWallInTz(new Date(atMs).toISOString(), tz, false);
+}
+
+/** 任意 ISO 在指定时区的墙上钟输入框值；withSeconds 时带秒（datetime-local step=1）。 */
+export function isoWallInTz(iso: string, tz: string, withSeconds = false): string {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: tz,
@@ -88,13 +93,17 @@ export function nowWallInTz(tz: string, atMs = Date.now()): string {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-    }).formatToParts(new Date(atMs));
+      ...(withSeconds ? { second: '2-digit' as const } : {}),
+    }).formatToParts(new Date(iso));
     const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '00';
-    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+    const base = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+    return withSeconds ? `${base}:${get('second')}` : base;
   } catch {
-    const d = new Date(atMs);
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
     const p = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    const base = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    return withSeconds ? `${base}:${p(d.getSeconds())}` : base;
   }
 }
 

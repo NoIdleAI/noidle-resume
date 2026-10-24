@@ -11,7 +11,8 @@ import {
 
 /**
  * 崩溃对账（§7.3，单位=叶）：进程在 recovering/checking 中途重启，
- * 重开后 reconcileOnBoot 必须给出诚实终态——已落盘→resumed，不明→paused，绝不重发。
+ * 重开后 reconcileOnBoot 必须给出诚实终态——已落盘→resumed；
+ * 不明→按 autoResend（开=回队自动重发，关=failed 终止）。
  */
 
 let envA: TestEnv;
@@ -76,15 +77,17 @@ test('场景 A：recovering 中崩溃，但续跑轮已落盘 → 重启对账�
 let envB2: TestEnv;
 let fixtureB: WorkspaceFixture;
 let fixtureC: WorkspaceFixture;
+let fixtureD: WorkspaceFixture;
 
-test('场景 B/C 准备：recovering 无落盘 + checking 中途', () => {
+test('场景 B/C/D 准备：recovering 无落盘 + checking 中途', () => {
   envB2 = makeTestEnv();
   envB = envB2;
   fixtureB = makeWorkspaceFixture(envB2.config.projectsRoot, 'ws-rec-b');
   fixtureC = makeWorkspaceFixture(envB2.config.projectsRoot, 'ws-rec-c');
+  fixtureD = makeWorkspaceFixture(envB2.config.projectsRoot, 'ws-rec-d');
 });
 
-test('场景 B：recovering 中崩溃且无续跑轮 → paused（绝不重发）', async () => {
+test('场景 B：recovering 中崩溃且无续跑轮 → autoResend 开，回队退避重发', async () => {
   const taskId = driveToRecovering(envB2, fixtureB);
   envB2.ctx.db.close();
   const ctx2 = (
@@ -92,13 +95,33 @@ test('场景 B：recovering 中崩溃且无续跑轮 → paused（绝不重发�
   ).buildContext(envB2.config, { env: 'test' });
   const summary = await ctx2.services.scheduler.reconcileOnBoot();
 
-  assert.equal(summary.recoveringPaused, 1);
+  assert.equal(summary.recoveringRequeued, 1);
   const task = ctx2.repos.tasks.byId(taskId);
-  assert.equal(task.status, 'paused');
+  assert.equal(task.status, 'waiting');
   assert.equal(task.last_error_code, 'RESUME_RESULT_UNKNOWN');
   assert.equal(task.verified_leaf_uuid, null);
+  assert.ok(new Date(task.scheduled_at).getTime() > Date.now());
   // 转写零增长
   const lines = fs.readFileSync(fixtureB.transcriptFile, 'utf8').trim().split('\n');
+  assert.equal(lines.length, 2);
+  ctx2.db.close();
+});
+
+test('场景 B2：autoResend 关 → recovering 无落盘对账为 failed（绝不重发）', async () => {
+  // B 已把 envB2 的库关掉，这里自持新上下文驱动到 recovering
+  const ctx1 = buildContext(envB2.config, { env: 'test' });
+  const taskId = driveToRecovering({ ctx: ctx1 } as never, fixtureD);
+  ctx1.db.close();
+  const ctx2 = buildContext(envB2.config, { env: 'test' });
+  ctx2.services.settings.patch({ autoResend: false });
+  const summary = await ctx2.services.scheduler.reconcileOnBoot();
+
+  assert.equal(summary.recoveringFailed, 1);
+  const task = ctx2.repos.tasks.byId(taskId);
+  assert.equal(task.status, 'failed');
+  assert.equal(task.last_error_code, 'RESUME_RESULT_UNKNOWN');
+  assert.equal(task.verified_leaf_uuid, null);
+  const lines = fs.readFileSync(fixtureD.transcriptFile, 'utf8').trim().split('\n');
   assert.equal(lines.length, 2);
   ctx2.db.close();
 });

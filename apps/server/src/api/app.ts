@@ -62,7 +62,9 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   const dist = webDistDir();
   const hasDist = fs.existsSync(path.join(dist, 'index.html'));
   if (hasDist) {
-    void app.register(fastifyStatic, { root: dist, wildcard: false });
+    // wildcard 默认按请求动态解析文件；false 会在启动时枚举文件注册路由，
+    // 前端重建后哈希变化会导致 JS 404→SPA 兜底（text/html）→ 浏览器拒载黑屏
+    void app.register(fastifyStatic, { root: dist });
   }
 
   app.setErrorHandler((err, req, reply) => {

@@ -134,30 +134,33 @@ try {
   console.log('④ 最近会话下拉 → 自动填充 ✓');
   await page.click('button:has-text("登记并核验身份")');
   await page.waitForSelector('.form-ok', { timeout: 8000 });
-  console.log('⑤ 登记并核验身份 ✓');
-  await page.click('.list .sw');
-  // 会话页行内没有状态栏，开关态即事实
-  await page.waitForFunction(
-    () => document.querySelector('.list .sw')?.classList.contains('on'),
-    undefined,
-    { timeout: 8000, polling: 300 },
-  );
-  console.log('⑥ 启用开关 ✓');
+  console.log('⑤ 加入自动化列表 ✓');
+  await page.waitForSelector('.list .row', { timeout: 8000 });
+  const rowText = await page.locator('.list .row').first().innerText();
+  if (!rowText.includes('监控中')) throw new Error('列表行未显示监控中（加列表即守护语义失效）');
   await page.screenshot({ path: `${SHOTS}/04-sessions-enabled.png`, fullPage: true });
+  console.log('⑥ 自动化列表就绪（加列表即守护，无开关）✓');
 
-  // ④ 人工登记限额（2 秒后重置）
-  await page.click('button:has-text("登记限额")');
+  // ⑤ 补录撞限：粘贴限额原文 → 自动解析重置时刻（+3 秒）→ 补录
+  await page.click('button:has-text("补录限额")');
   await page.waitForSelector('.dialog', { timeout: 5000 });
-  const d = new Date(Date.now() + 2000);
+  const d = new Date(Date.now() + 3000 + 8 * 3600_000); // Asia/Shanghai 墙上钟
   const p = (n) => String(n).padStart(2, '0');
-  // 按服务器配置时区（Asia/Shanghai）的墙上钟填
-  const wallUtc = new Date(d.getTime() + 8 * 3600_000);
-  // datetime-local 填分钟精度（提交端会补秒）
-  const dtLocal = `${wallUtc.getUTCFullYear()}-${p(wallUtc.getUTCMonth() + 1)}-${p(wallUtc.getUTCDate())}T${p(wallUtc.getUTCHours())}:${p(wallUtc.getUTCMinutes())}`;
-  await page.fill('.dialog input[type="datetime-local"]', dtLocal);
-  await page.click('button:has-text("登记 429/1308")');
+  const resetWall = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+  await page.fill(
+    '.dialog textarea',
+    `API Error: Request rejected (429) · [1308][已达到 5 小时的使用上限。您的限额将在 ${resetWall} 重置。][e2e-raw]`,
+  );
+  await page.click('button:has-text("解析并填充")');
+  await page.waitForFunction(
+    () => (document.querySelector('.dialog input[type="datetime-local"]') ?? {}).value?.length === 19,
+    undefined,
+    { timeout: 8000, polling: 200 },
+  );
+  await page.screenshot({ path: `${SHOTS}/05-manual-event.png`, fullPage: true });
+  await page.click('.dialog button:has-text("补录")');
   await page.waitForSelector('.dialog .form-ok', { timeout: 8000 });
-  console.log('⑦ 人工登记限额 → 任务入队 ✓');
+  console.log('⑦ 补录撞限（粘贴自动解析）→ 任务入队 ✓');
   await page.screenshot({ path: `${SHOTS}/05-manual-event.png`, fullPage: true });
   // 点弹层外部关闭（overlay @click.self）
   await page.mouse.click(20, 20);

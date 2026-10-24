@@ -99,8 +99,11 @@ export function buildContext(config: AppConfig, opts?: { env?: string }): AppCon
     clock,
     bus,
     audit,
+    settings,
+    intake,
     projectsRoot: config.projectsRoot,
     watcher,
+    enforceLimitCheck: (opts?.env ?? process.env.NODE_ENV ?? 'development') !== 'test',
   });
   const discover = new DiscoveryService({
     sessions: repos.sessions,
@@ -114,6 +117,7 @@ export function buildContext(config: AppConfig, opts?: { env?: string }): AppCon
   const scheduler = new ResumeScheduler({
     tasks: repos.tasks,
     sessions: repos.sessions,
+    sessionsService: sessions,
     settings,
     runner,
     clock,

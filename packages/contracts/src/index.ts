@@ -43,6 +43,7 @@ export const ERROR_CODES = [
   'NOT_FOUND',
   'SESSION_ALREADY_EXISTS',
   'SESSION_NOT_ENABLED',
+  'SESSION_NOT_LIMITED',
   'SESSION_IDENTITY_UNVERIFIED',
   'SESSION_TRANSCRIPT_MISSING',
   'SESSION_HOT_HELD',
@@ -120,7 +121,7 @@ export interface ResumeTaskDto {
 export interface SettingsDto {
   /** IANA 时区名，重置时刻按此墙钟解析。 */
   timezone: string;
-  /** 同一任务的最大恢复尝试次数，超过转 paused。 */
+  /** 同一任务的最大恢复尝试次数，超过转 failed。 */
   maxAttempts: number;
   /** 到期后仍受限时的退避基数（毫秒）。 */
   backoffBaseMs: number;
@@ -132,6 +133,8 @@ export interface SettingsDto {
   resumePromptTemplate: string;
   /** 串行恢复并发数（设计书 §5.1 规则 6，默认 1）。 */
   concurrency: number;
+  /** 自动化重发：恢复结果未知/失败时按退避间隔自动重发（关闭则结果未知一次即终止，绝不重发）。 */
+  autoResend: boolean;
 }
 
 /** 脱敏操作日志（设计书 §8.5）。 */
@@ -178,6 +181,18 @@ export interface DiscoveredSessionDto {
   sizeBytes: number;
   /** 已在白名单（同 sessionId 且工作区 realpath 一致）。 */
   registered: boolean;
+}
+
+/** 限额提示原文解析结果（补录对话框「粘贴自动填充」用，不入库）。 */
+export interface LimitParseDto {
+  httpStatus: number | null;
+  providerCode: string | null;
+  /** 原文中的墙钟串（未解析时区）。 */
+  resetAtRaw: string | null;
+  /** 按配置时区解析成的 UTC ISO；解析失败为 null。 */
+  resetAt: string | null;
+  resetTz: string | null;
+  confidence: EventConfidence;
 }
 
 /** API 请求/响应荷载。 */

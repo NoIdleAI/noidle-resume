@@ -2,9 +2,12 @@ import type { Db } from '../db.ts';
 
 export interface ResumeTaskRow {
   id: string;
-  session_row_id: string;
+  /** 会话被自动移除登记后置 NULL（任务归档保留，迁移 003）。 */
+  session_row_id: string | null;
   session_id: string;
   project_path: string;
+  /** 创建时快照的会话展示名：会话移除后历史列表仍可显示。 */
+  display_name: string | null;
   usage_event_id: string | null;
   status: string;
   base_leaf_uuid: string | null;
@@ -23,7 +26,6 @@ export interface ResumeTaskRow {
 }
 
 export interface TaskWithSessionRow extends ResumeTaskRow {
-  display_name: string;
   enabled: number;
 }
 
@@ -32,6 +34,7 @@ export interface NewResumeTaskRow {
   sessionRowId: string;
   sessionId: string;
   projectPath: string;
+  displayName: string;
   usageEventId: string | null;
   status: string;
   scheduledAt: string;
@@ -49,6 +52,7 @@ export class TasksRepo {
   private stmtActiveBySessionRow;
   private stmtDue;
   private stmtByStatus;
+  private stmtClearHistory;
 
   private stmtClaimWaiting;
   private stmtToRecovering;
@@ -62,41 +66,50 @@ export class TasksRepo {
   private stmtPauseFromWaiting;
   private stmtCancelSettled;
   private stmtCheckingToWaiting;
+  private stmtHotHoldBackToWaiting;
 
   constructor(private db: Db) {
     this.stmtInsert = db.prepare(
       `INSERT INTO resume_tasks
-         (id, session_row_id, session_id, project_path, usage_event_id, status,
+         (id, session_row_id, session_id, project_path, display_name, usage_event_id, status,
           scheduled_at, created_at, updated_at)
        VALUES
-         (@id, @sessionRowId, @sessionId, @projectPath, @usageEventId, @status,
+         (@id, @sessionRowId, @sessionId, @projectPath, @displayName, @usageEventId, @status,
           @scheduledAt, @createdAt, @createdAt)`,
     );
-    // 读路径统一带出会话 display_name / enabled（DTO 需要；notify 也走这些语句）
+    // 读路径统一带出会话 display_name / enabled（DTO 需要；notify 也走这些语句）。
+    // LEFT JOIN + COALESCE：会话自动移除后任务归档仍可读（display_name 用快照，enabled 视为 1）
     this.stmtById = db.prepare(
-      `SELECT t.*, s.display_name, s.enabled
-       FROM resume_tasks t JOIN sessions s ON s.id = t.session_row_id
+      `SELECT t.*, COALESCE(s.display_name, t.display_name) AS display_name,
+              COALESCE(s.enabled, 1) AS enabled
+       FROM resume_tasks t LEFT JOIN sessions s ON s.id = t.session_row_id
        WHERE t.id = ?`,
     );
     this.stmtList = db.prepare(
-      `SELECT t.*, s.display_name, s.enabled
-       FROM resume_tasks t JOIN sessions s ON s.id = t.session_row_id
+      `SELECT t.*, COALESCE(s.display_name, t.display_name) AS display_name,
+              COALESCE(s.enabled, 1) AS enabled
+       FROM resume_tasks t LEFT JOIN sessions s ON s.id = t.session_row_id
        ORDER BY t.created_at DESC LIMIT @limit OFFSET @offset`,
     );
     this.stmtActiveBySessionRow = db.prepare(
-      `SELECT t.*, s.display_name, s.enabled
-       FROM resume_tasks t JOIN sessions s ON s.id = t.session_row_id
+      `SELECT t.*, COALESCE(s.display_name, t.display_name) AS display_name,
+              COALESCE(s.enabled, 1) AS enabled
+       FROM resume_tasks t LEFT JOIN sessions s ON s.id = t.session_row_id
        WHERE t.session_row_id = ? AND t.status IN ('waiting','checking','recovering')`,
     );
     this.stmtDue = db.prepare(
-      `SELECT t.*, s.display_name, s.enabled
-       FROM resume_tasks t JOIN sessions s ON s.id = t.session_row_id
+      `SELECT t.*, COALESCE(s.display_name, t.display_name) AS display_name,
+              COALESCE(s.enabled, 1) AS enabled
+       FROM resume_tasks t LEFT JOIN sessions s ON s.id = t.session_row_id
        WHERE t.status = 'waiting' AND t.cancel_requested = 0
-         AND s.enabled = 1 AND t.scheduled_at <= @now
+         AND COALESCE(s.enabled, 1) = 1 AND t.scheduled_at <= @now
        ORDER BY t.scheduled_at ASC
        LIMIT @limit`,
     );
     this.stmtByStatus = db.prepare('SELECT * FROM resume_tasks WHERE status = ?');
+    this.stmtClearHistory = db.prepare(
+      `DELETE FROM resume_tasks WHERE status IN ('resumed','failed','cancelled','paused')`,
+    );
 
     this.stmtClaimWaiting = db.prepare(
       `UPDATE resume_tasks SET status = 'checking', updated_at = ?
@@ -158,6 +171,11 @@ export class TasksRepo {
       `UPDATE resume_tasks SET status = 'waiting', updated_at = @at
        WHERE id = @id AND status = 'checking'`,
     );
+    this.stmtHotHoldBackToWaiting = db.prepare(
+      `UPDATE resume_tasks SET status = 'waiting', scheduled_at = @scheduledAt,
+         attempt_count = @attemptCount, last_error_code = 'SESSION_HOT_HELD', updated_at = @at
+       WHERE id = @id AND status = 'checking'`,
+    );
   }
 
   insert(row: NewResumeTaskRow): boolean {
@@ -167,6 +185,7 @@ export class TasksRepo {
         sessionRowId: row.sessionRowId,
         sessionId: row.sessionId,
         projectPath: row.projectPath,
+        displayName: row.displayName,
         usageEventId: row.usageEventId,
         status: row.status,
         scheduledAt: row.scheduledAt,
@@ -207,6 +226,11 @@ export class TasksRepo {
     return this.stmtByStatus.all(status) as ResumeTaskRow[];
   }
 
+  /** 清空历史归档（终态任务），返回删除条数；审计日志不受影响。 */
+  clearHistory(): number {
+    return this.stmtClearHistory.run().changes;
+  }
+
   /** waiting → checking。 */
   claimWaiting(id: string, at: string): boolean {
     return this.stmtClaimWaiting.run(at, id).changes === 1;
@@ -241,10 +265,10 @@ export class TasksRepo {
     );
   }
 
-  /** recovering → waiting/paused/failed（attempt_count 由调用方算好）。 */
+  /** recovering → waiting/failed（attempt_count 由调用方算好；「暂停」已退役）。 */
   finishFromRecovering(
     id: string,
-    status: 'waiting' | 'paused' | 'failed',
+    status: 'waiting' | 'failed',
     code: string | null,
     attemptCount: number,
     scheduledAt: string,
@@ -276,15 +300,28 @@ export class TasksRepo {
     );
   }
 
-  /** checking → paused/failed（核验阶段失败）。 */
+  /** checking → failed/cancelled（核验阶段失败：转写缺失/会话被禁）。 */
   finishFromChecking(
     id: string,
-    status: 'paused' | 'failed' | 'cancelled',
+    status: 'failed' | 'cancelled',
     code: string,
     at: string,
   ): boolean {
     return (
       this.stmtFinishFromChecking.run({ id, status, code, at }).changes === 1
+    );
+  }
+
+  /** checking → waiting（热持有拒绝：计一次尝试，退避后自动重试）。 */
+  hotHoldBackToWaiting(
+    id: string,
+    attemptCount: number,
+    scheduledAt: string,
+    at: string,
+  ): boolean {
+    return (
+      this.stmtHotHoldBackToWaiting.run({ id, attemptCount, scheduledAt, at })
+        .changes === 1
     );
   }
 

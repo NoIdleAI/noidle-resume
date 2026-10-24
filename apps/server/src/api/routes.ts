@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ManualUsageLimitRequest } from '@noidle/auto-resume-contracts';
 import type { AppContext } from '../context.ts';
-import { BizError } from '../shared/errors.ts';
+import { BizError, validationError } from '../shared/errors.ts';
 import { toAuditDto, toSessionDto, toTaskDto, toUsageEventDto } from '../shared/mappers.ts';
+import { parseLimitMessage } from '../modules/limit/detector.ts';
+import { zonedTimeToUtc } from '../modules/limit/timezone.ts';
 
 function intQuery(v: unknown, def: number, max: number): number {
   const n = Number(v);
@@ -48,6 +50,34 @@ export function registerRoutes(app: FastifyInstance, ctx: AppContext): void {
     return { ok: true };
   });
 
+  // ---- 限额提示原文解析（补录对话框「粘贴自动填充」；纯工具端点，不入库） ----
+  app.post('/api/v1/parse-limit', async (req) => {
+    const { rawMessage } = (req.body ?? {}) as { rawMessage?: string };
+    const text = (rawMessage ?? '').trim();
+    if (!text) throw validationError('rawMessage 必填');
+    const limit = parseLimitMessage(text);
+    if (!limit) {
+      throw new BizError('VALIDATION_ERROR', '未识别出限额特征（需要 429/1308 与「将在 … 重置」时刻）', 422);
+    }
+    const tz = services.settings.get().timezone;
+    let resetAt: string | null = null;
+    if (limit.resetAtRaw) {
+      try {
+        resetAt = zonedTimeToUtc(limit.resetAtRaw, tz).toISOString();
+      } catch {
+        resetAt = null; // 墙钟解析失败 → 前端让用户手填
+      }
+    }
+    return {
+      httpStatus: limit.httpStatus,
+      providerCode: limit.providerCode,
+      resetAtRaw: limit.resetAtRaw,
+      resetAt,
+      resetTz: limit.resetAtRaw ? tz : null,
+      confidence: limit.confidence,
+    };
+  });
+
   // ---- 最近会话发现（登记下拉；只读扫描转写根，不入库） ----
   app.get('/api/v1/discover/sessions', async (req) => {
     const q = req.query as { hours?: string };
@@ -66,32 +96,9 @@ export function registerRoutes(app: FastifyInstance, ctx: AppContext): void {
     return { task: toTaskDto(services.tasks.byId(id)) };
   });
 
-  app.post('/api/v1/tasks/:id/retry', async (req) => {
-    const { id } = req.params as { id: string };
-    const task = services.tasks.retry(id);
-    ctx.auditNote('api.tasks.retry', id);
-    return { task: toTaskDto(task) };
-  });
-
-  app.post('/api/v1/tasks/:id/cancel', async (req) => {
-    const { id } = req.params as { id: string };
-    const task = services.tasks.cancel(id);
-    ctx.auditNote('api.tasks.cancel', id);
-    return { task: toTaskDto(task) };
-  });
-
-  app.post('/api/v1/tasks/:id/pause', async (req) => {
-    const { id } = req.params as { id: string };
-    const task = services.tasks.pause(id);
-    ctx.auditNote('api.tasks.pause', id);
-    return { task: toTaskDto(task) };
-  });
-
-  app.post('/api/v1/tasks/pause-all', async () => {
-    const n = services.tasks.pauseAll();
-    ctx.auditNote('api.tasks.pause_all', null, `count=${n}`);
-    return { paused: n };
-  });
+  // 任务级手动动词（重试/暂停/取消）已全部退役（2026-10-24）：
+  // 是否自动重发看 settings.autoResend；停止守护=会话页移除（仓储层连带取消）；
+  // 重新入队=会话页补录撞限。任务详情页纯只读。
 
   // ---- 限额事件 ----
   app.post('/api/v1/events/usage-limit', async (req) => {
@@ -117,10 +124,17 @@ export function registerRoutes(app: FastifyInstance, ctx: AppContext): void {
     return { events: rows.map(toUsageEventDto) };
   });
 
+  // 清空历史归档（终态任务）；进行中任务不受影响
+  app.delete('/api/v1/tasks/history', async () => {
+    const cleared = services.tasks.clearHistory();
+    ctx.auditNote('api.tasks.clear_history', null, `${cleared} 条`);
+    return { cleared };
+  });
+
   // ---- 日志与设置 ----
   app.get('/api/v1/logs', async (req) => {
     const q = req.query as { limit?: string; offset?: string };
-    const rows = services.audit.list(intQuery(q.limit, 100, 500), intQuery(q.offset, 0, 1e6));
+    const rows = services.audit.list(intQuery(q.limit, 100, 100), intQuery(q.offset, 0, 1e6));
     return { logs: rows.map(toAuditDto) };
   });
 

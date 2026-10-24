@@ -6,16 +6,12 @@ import { api } from '../api/client';
 import { humanizeError } from '../api/humanize';
 import { eventById, refreshEvents, refreshTasks, settings, store } from '../stores/data';
 import { fmtHMS, shortId, shortPath } from '../stores/format';
-import { useTaskActions } from '../stores/taskActions';
 import StatusChip from '../components/StatusChip.vue';
 import EvidenceBlock from '../components/EvidenceBlock.vue';
 import RecoveryTimeline from '../components/RecoveryTimeline.vue';
 
 const route = useRoute();
 const router = useRouter();
-// 顶层解构：模板里 ref 才会自动解包（嵌在对象里不会，v-if 恒真出空红框）
-const { busyId: actionBusy, error: actionError, run: runAction } = useTaskActions();
-const loadError = ref('');
 const notFound = ref(false);
 
 const task = computed<ResumeTaskDto | null>(() => {
@@ -68,28 +64,31 @@ const reading = computed(() => {
       break;
     case 'resumed':
       out.push('<b class="good">恢复成功</b>：续跑轮已落盘且血统核验通过。');
+      out.push('重启 VS Code（或重新打开该会话 / 其他终端里的 claude）即可看到续跑写入的内容。');
       out.push(`核验叶 <b>${shortId(t.verifiedLeafUuid ?? '')}</b>（起点叶 ${shortId(t.baseLeafUuid ?? '')} 的后代）。`);
       break;
     case 'paused': {
       const code = t.lastErrorCode ?? '';
-      if (code === 'RESET_TIME_UNPARSED') {
-        out.push('<b class="bad">重置时刻解析失败</b> — 事件里没有可识别的重置时间。请到会话页人工登记正确时刻，或重试。');
-      } else if (code === 'RESUME_RESULT_UNKNOWN') {
-        out.push('<b class="bad">续跑结果未知</b>：进程结束但转写里找不到本工具的续跑轮。');
-        out.push('为防重复投喂原会话，<b>绝不自动重发</b> — 请人工查看会话后决定是否重试。');
-      } else if (code === 'SESSION_HOT_HELD') {
-        out.push('<b class="acc">侧边栏正持有该会话（热）</b>，按安全规则拒绝接管。等它冷下来后可重试。');
-      } else if (code === 'PAUSED_BY_USER') {
-        out.push('已由用户暂停。');
-      } else {
-        out.push(`已暂停：${humanizeError(code, '原因见错误码')}。`);
-      }
+      out.push(`已停止（旧版暂停任务，已按未完成归档）：${humanizeError(code, '原因见错误码')}。`);
       break;
     }
-    case 'failed':
-      out.push(`<b class="bad">恢复失败</b>：已达最大尝试次数（${settings.value.maxAttempts}）。`);
-      out.push(`最近错误：${humanizeError(t.lastErrorCode ?? '', '未知')}。`);
+    case 'failed': {
+      const code = t.lastErrorCode ?? '';
+      if (code === 'RESET_TIME_UNPARSED') {
+        out.push('<b class="bad">重置时刻解析失败</b> — 事件里没有可识别的重置时间。到会话页补录正确时刻重新入队。');
+      } else if (code === 'RESUME_RESULT_UNKNOWN') {
+        out.push('<b class="bad">续跑结果未知</b>：转写里找不到本工具的续跑轮。');
+        out.push(settings.value.autoResend
+          ? '已达最大尝试次数，<b>自动重发停止</b> — 要继续守护到会话页补录撞限。'
+          : '自动重发已关闭，<b>不会重发</b> — 要继续守护到会话页补录撞限。');
+      } else if (code === 'SESSION_HOT_HELD') {
+        out.push('<b class="acc">侧边栏正持有该会话（热）</b>，按安全规则拒绝接管。等它冷下来自动再试（每次计入尝试数）。');
+      } else {
+        out.push(`<b class="bad">恢复失败</b>：${humanizeError(code, '原因见错误码')}。`);
+      }
+      out.push(`尝试 ${t.attemptCount} / 上限 ${settings.value.maxAttempts}。`);
       break;
+    }
     case 'cancelled':
       out.push('任务已取消（用户操作或会话被禁用/移除）。');
       break;
@@ -130,12 +129,6 @@ const evidenceJson = computed<string>(() => {
     return raw;
   }
 });
-
-const canPause = computed(() => task.value?.status === 'waiting');
-const canCancel = computed(() =>
-  ['waiting', 'checking', 'recovering', 'paused', 'failed'].includes(task.value?.status ?? ''),
-);
-const canRetry = computed(() => ['paused', 'failed'].includes(task.value?.status ?? ''));
 
 function back(): void {
   void router.back();
@@ -204,12 +197,9 @@ function back(): void {
       </div>
     </div>
 
-    <div v-if="actionError" class="form-error">{{ actionError }}</div>
     <div class="actions">
-      <button v-if="canRetry" class="btn primary" :disabled="actionBusy !== null" @click="runAction(task.id, 'retry')">重试</button>
-      <button v-else-if="canPause" class="btn primary" :disabled="actionBusy !== null" @click="runAction(task.id, 'pause')">暂停任务</button>
-      <button v-if="canCancel" class="btn ghost" :disabled="actionBusy !== null" @click="runAction(task.id, 'cancel')">取消任务</button>
       <button class="btn ghost" @click="back">返回</button>
+      <span class="hint">详情页纯只读 — 停止守护到会话页移除；自动重发在 <b>设置</b>（当前{{ settings.autoResend ? '开启' : '关闭' }}）</span>
     </div>
   </section>
 

@@ -31,7 +31,7 @@ async function submit(): Promise<void> {
   <div class="overlay" style="place-items: center">
     <div class="dialog" style="width: 440px">
       <div class="brand" style="margin-bottom: 16px">
-        <span class="mark">N</span>NoIdle Resume<span class="for">for Claude Code</span>
+        <span class="mark">N</span>NoIdle Resume
       </div>
       <div style="font-size: 13px; color: var(--tx-2); line-height: 1.8; margin-bottom: 16px">
         本地值守台需要访问令牌。启动后台时会打印在终端，也存于：

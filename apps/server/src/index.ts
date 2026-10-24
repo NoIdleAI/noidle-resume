@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   services.audit.log(
     'service.started',
     null,
-    `checking→waiting=${summary.checkingBackToWaiting} recovering→resumed=${summary.recoveringResumed} recovering→paused=${summary.recoveringPaused}`,
+    `checking→waiting=${summary.checkingBackToWaiting} recovering→resumed=${summary.recoveringResumed} recovering→requeue=${summary.recoveringRequeued} recovering→failed=${summary.recoveringFailed}`,
     'system',
   );
 

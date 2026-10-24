@@ -50,13 +50,13 @@ test('到期后仍受限：按退避回 waiting，attempt 递增（§6.3）', as
   assert.equal(task.last_error_code, 'STILL_LIMITED');
   assert.ok(new Date(task.scheduled_at).getTime() > Date.now());
 
-  // 退避到期后第二次尝试：attempts 耗尽 → paused 等人工，绝不误报成功
+  // 退避到期后第二次尝试：attempts 耗尽 → failed 如实报告，绝不误报成功
   await new Promise((r) => setTimeout(r, 150));
   await env.ctx.services.scheduler.runAttempt(
     env.ctx.services.tasks.list(10, 0).find((t) => t.id === taskId)!,
   );
   task = env.ctx.repos.tasks.byId(taskId);
-  assert.equal(task.status, 'paused');
+  assert.equal(task.status, 'failed');
   assert.equal(task.last_error_code, 'STILL_LIMITED');
   assert.equal(task.attempt_count, 2);
   assert.equal(task.verified_leaf_uuid, null);
@@ -69,18 +69,13 @@ test('到期后仍受限：按退避回 waiting，attempt 递增（§6.3）', as
   assert.equal(lines.length, 2);
 });
 
-test('paused 任务可手动重试，重试后重新走全链（§5.2）', () => {
-  const task = env.ctx.services.tasks
+test('恢复完结自动移除登记；failed 归档保留（迁移 003：FK SET NULL + 快照名）', () => {
+  // failed 是终态：会话已按「完结即移除」自动清出登记
+  const failedTask = env.ctx.services.tasks
     .list(10, 0)
-    .find((t) => t.last_error_code === 'STILL_LIMITED')!;
-  const retried = env.ctx.services.tasks.retry(task.id);
-  assert.equal(retried.status, 'waiting');
-  assert.equal(retried.cancel_requested, 0);
-  // attempt 保留，防无限循环
-  assert.ok(retried.attempt_count >= 2);
-
-  assert.throws(
-    () => env.ctx.services.tasks.retry(task.id),
-    (err: unknown) => (err as { code?: string }).code === 'TASK_NOT_RETRYABLE',
-  );
+    .find((t) => t.status === 'failed')!;
+  const row = env.ctx.repos.tasks.byId(failedTask.id)!;
+  assert.equal(row.status, 'failed');
+  assert.equal(row.session_row_id, null); // 会话已移除，任务归档保留
+  assert.ok(row.display_name); // 快照展示名，历史列表仍可读
 });

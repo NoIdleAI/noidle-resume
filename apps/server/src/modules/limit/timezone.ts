@@ -29,7 +29,9 @@ function tzOffsetMs(utc: Date, tz: string): number {
   const parts = formatter(tz).formatToParts(utc);
   const get = (type: string): number => {
     const v = parts.find((p) => p.type === type)?.value ?? '0';
-    return Number(v === '24' ? '0' : v); // hour12:false 下午夜可能给出 24
+    // 仅小时有 h24 问题（午夜可能给出 24）；day/minute/second 出现 24 是合法值，绝不能清零
+    if (type === 'hour' && v === '24') return 0;
+    return Number(v);
   };
   const asUtc = Date.UTC(
     get('year'),

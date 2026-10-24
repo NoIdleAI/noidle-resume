@@ -57,7 +57,7 @@ test('添加会话（默认不启用）+ 重复登记 409', async () => {
     payload: { sessionId: fixture.sessionId, projectPath: fixture.projectPath },
   });
   assert.equal(res.statusCode, 200);
-  assert.equal(res.json().session.enabled, false);
+  assert.equal(res.json().session.enabled, true); // 加列表即守护（2026-10-24 语义）
 
   const dup = await app.inject({
     method: 'POST',
@@ -97,7 +97,7 @@ test('启用会话 → 人工登记限额事件 → 建任务', async () => {
   assert.equal(ev.json().taskCreated, true);
 });
 
-test('任务列表/详情/取消', async () => {
+test('任务列表/详情（任务级手动动词已退役：cancel/retry/pause 端点 404）', async () => {
   const list = await app.inject({ method: 'GET', url: '/api/v1/tasks', headers: bearer });
   assert.equal(list.statusCode, 200);
   const task = list.json().tasks[0];
@@ -111,13 +111,12 @@ test('任务列表/详情/取消', async () => {
   });
   assert.equal(one.statusCode, 200);
 
-  const cancel = await app.inject({
+  const retired = await app.inject({
     method: 'POST',
     url: `/api/v1/tasks/${task.id}/cancel`,
     headers: bearer,
   });
-  assert.equal(cancel.statusCode, 200);
-  assert.equal(cancel.json().task.status, 'cancelled');
+  assert.equal(retired.statusCode, 404);
 
   const gone = await app.inject({
     method: 'GET',
@@ -128,14 +127,7 @@ test('任务列表/详情/取消', async () => {
   assert.equal(gone.json().error.code, 'NOT_FOUND');
 });
 
-test('pause-all（无 waiting 时为 0）+ 事件列表 + 日志列表', async () => {
-  const pa = await app.inject({
-    method: 'POST',
-    url: '/api/v1/tasks/pause-all',
-    headers: bearer,
-  });
-  assert.equal(pa.statusCode, 200);
-
+test('事件列表 + 日志列表', async () => {
   const events = await app.inject({
     method: 'GET',
     url: '/api/v1/events/usage-limit',
@@ -207,35 +199,38 @@ test('浏览器 Cookie 授权：verify 下发 → 写操作需 X-CAR-Auth 头（
 
   // Cookie 已有但缺自定义头 → 401（跨站无法伪造自定义头）
   const noHeader = await app.inject({
-    method: 'POST',
-    url: '/api/v1/tasks/pause-all',
+    method: 'PATCH',
+    url: '/api/v1/settings',
     headers: { 'content-type': 'application/json', cookie },
+    payload: {},
   });
   assert.equal(noHeader.statusCode, 401);
 
   // 带头但 Origin 恶意 → 401
   const evilOrigin = await app.inject({
-    method: 'POST',
-    url: '/api/v1/tasks/pause-all',
+    method: 'PATCH',
+    url: '/api/v1/settings',
     headers: {
       'content-type': 'application/json',
       cookie,
       'x-car-auth': '1',
       origin: 'http://evil.example.com',
     },
+    payload: {},
   });
   assert.equal(evilOrigin.statusCode, 401);
 
   // 同源 + 自定义头 → 200
   const good = await app.inject({
-    method: 'POST',
-    url: '/api/v1/tasks/pause-all',
+    method: 'PATCH',
+    url: '/api/v1/settings',
     headers: {
       'content-type': 'application/json',
       cookie,
       'x-car-auth': '1',
       origin: 'http://localhost:7842',
     },
+    payload: {},
   });
   assert.equal(good.statusCode, 200);
 

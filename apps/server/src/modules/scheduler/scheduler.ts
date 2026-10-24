@@ -8,12 +8,18 @@ import type { AuditService } from '../audit/auditService.ts';
 import { transcriptPath } from '../../adapters/vscode-claude/transcriptLocator.ts';
 import { latestLeafUuid, readTranscriptEntries } from '../resume/transcript.ts';
 import { backoffDelay } from './backoff.ts';
+import { parseLimitMessage } from '../limit/detector.ts';
+import { isSupportedTimezone, zonedTimeToUtc } from '../limit/timezone.ts';
 import { toTaskDto } from '../../shared/mappers.ts';
 import fs from 'node:fs';
 
 export interface SchedulerDeps {
   tasks: TasksRepo;
   sessions: SessionsRepo;
+  /** 完结自动移除登记用（走服务层：审计 + 监听同步 + 事件广播）。 */
+  sessionsService: {
+    remove(id: string): void;
+  };
   settings: SettingsService;
   runner: ResumeRunner;
   clock: Clock;
@@ -25,13 +31,16 @@ export interface SchedulerDeps {
 export interface ReconcileSummary {
   checkingBackToWaiting: number;
   recoveringResumed: number;
-  recoveringPaused: number;
+  recoveringRequeued: number;
+  recoveringFailed: number;
 }
 
 /**
  * 串行调度器（设计书 §5.1 规则 6 / §7）。
- * 到期 → checking（核验）→ recovering（headless 续跑）→ resumed，
- * 全程 CAS 状态推进；提交结果不明一律 paused，绝不盲目重发（§7.3）。
+ * 到期 → checking（核验）→ recovering（headless 续跑）→ resumed / failed，
+ * 全程 CAS 状态推进。「暂停」已退役（2026-10-24）：结果不明是否重发由
+ * settings.autoResend 决定——开=按退避自动重发直到 maxAttempts；关=一次未知即 failed。
+ * 轮次是否落盘以转写核验为事实源，进程结局只作归类参考。
  */
 export class ResumeScheduler {
   private timer: NodeJS.Timeout | null = null;
@@ -78,8 +87,8 @@ export class ResumeScheduler {
     if (!tasks.claimWaiting(task.id, at())) return;
     this.notify(task.id);
 
-    // ① 白名单在执行前重核（§5.2 启停行为）
-    const session = sessions.byId(task.session_row_id);
+    // ① 白名单在执行前重核（§5.2 启停行为）；会话已被自动移除（session_row_id 为空）→ 取消
+    const session = task.session_row_id ? sessions.byId(task.session_row_id) : undefined;
     if (!session || session.enabled !== 1) {
       tasks.finishFromChecking(task.id, 'cancelled', 'TASK_CANCELLED', at());
       this.notify(task.id);
@@ -99,22 +108,31 @@ export class ResumeScheduler {
       baseLeaf = null;
     }
     if (!baseLeaf) {
-      tasks.finishFromChecking(task.id, 'paused', 'SESSION_TRANSCRIPT_MISSING', at());
+      tasks.finishFromChecking(task.id, 'failed', 'SESSION_TRANSCRIPT_MISSING', at());
       this.notify(task.id);
+      this.autoRemoveSession(task);
       return;
     }
 
-    // ③ 冷会话守卫（§5.1 规则 11）：热持有 → 拒跑转待确认
+    // ③ 冷会话守卫（§5.1 规则 11）：热持有 → 计一次尝试，退避后自动重试直到上限
     const cold = await runner.assertCold(task.session_id);
     if (!cold.cold) {
-      const done = tasks.finishFromChecking(task.id, 'paused', 'SESSION_HOT_HELD', at());
-      if (done) {
-        this.deps.audit.log(
-          'task.hot_held',
-          task.id,
-          `pids=${cold.pids?.join(',') ?? ''} err=${cold.error ?? ''}`,
-          'system',
-        );
+      const cfg = settings.get();
+      const attempt = task.attempt_count + 1;
+      this.deps.audit.log(
+        'task.hot_held',
+        task.id,
+        `pids=${cold.pids?.join(',') ?? ''} err=${cold.error ?? ''} attempt=${attempt}`,
+        'system',
+      );
+      if (attempt >= cfg.maxAttempts) {
+        tasks.finishFromChecking(task.id, 'failed', 'SESSION_HOT_HELD', at());
+        this.notify(task.id);
+        this.autoRemoveSession(task);
+      } else {
+        const delay = backoffDelay(attempt, cfg.backoffBaseMs, cfg.backoffCapMs);
+        const nextAt = new Date(this.deps.clock.now().getTime() + delay).toISOString();
+        tasks.hotHoldBackToWaiting(task.id, attempt, nextAt, at());
       }
       this.notify(task.id);
       return;
@@ -129,82 +147,128 @@ export class ResumeScheduler {
     const result = await runner.resume(task.session_id, promptSent, task.project_path);
     const cfg = settings.get();
 
-    if (result.kind === 'ok') {
-      // ⑤ 核验：只认本工具分支叶落盘（§7.2 recovering → resumed）
-      const verify = await runner.verifyResumeLeaf(
-        task.session_id,
-        task.project_path,
-        baseLeaf,
-        promptSent,
-      );
-      if (verify.status === 'verified' && verify.leafUuid) {
-        const evidence = JSON.stringify({
-          baseLeafUuid: baseLeaf,
-          ourTurnUuid: verify.ourTurnUuid,
-          verifiedLeafUuid: verify.leafUuid,
-          resultMessage: result.message ?? null,
-        });
-        tasks.markResumed(task.id, verify.leafUuid, evidence, at());
-        this.deps.audit.log('task.resumed', task.id, `leaf=${verify.leafUuid}`, 'system');
-      } else {
-        // 提交结果不明 → paused，不自动重发（§7.3）
-        tasks.finishFromRecovering(
-          task.id,
-          'paused',
-          'RESUME_RESULT_UNKNOWN',
-          attempt,
-          at(),
-          at(),
-        );
-        this.deps.audit.log(
-          'task.verify_unknown',
-          task.id,
-          `${verify.status}: ${verify.reason ?? ''}`,
-          'system',
-        );
-      }
+    // ⑤ 转写为事实源：不管进程怎么退场（含超时被杀），轮次落盘即成功
+    const verify = await runner.verifyResumeLeaf(
+      task.session_id,
+      task.project_path,
+      baseLeaf,
+      promptSent,
+    );
+    if (verify.status === 'verified' && verify.leafUuid && result.kind !== 'still-limited') {
+      const evidence = JSON.stringify({
+        baseLeafUuid: baseLeaf,
+        ourTurnUuid: verify.ourTurnUuid,
+        verifiedLeafUuid: verify.leafUuid,
+        resultKind: result.kind,
+        resultMessage: result.message ?? null,
+      });
+      tasks.markResumed(task.id, verify.leafUuid, evidence, at());
+      this.deps.audit.log('task.resumed', task.id, `leaf=${verify.leafUuid}`, 'system');
       this.notify(task.id);
+      this.autoRemoveSession(task);
       return;
     }
 
-    const retryable =
+    // 未恢复：归类失败原因，按自动重发策略决定重试或终止。
+    // 落盘但仍受限（§6.3）：真实 CLI 会把 429 错误轮次写进转写，「落盘」≠「额度恢复」，
+    // 绝不判 resumed —— 能从报错原文解析出重置时刻就直接排到那时，否则退避重试。
+    const code =
       result.kind === 'still-limited'
         ? 'STILL_LIMITED'
         : result.kind === 'timeout'
           ? 'RESUME_ATTEMPT_TIMEOUT'
-          : 'RESUME_ATTEMPT_FAILED';
+          : result.kind === 'ok'
+            ? 'RESUME_RESULT_UNKNOWN'
+            : 'RESUME_ATTEMPT_FAILED';
+    this.deps.audit.log(
+      'task.verify_unknown',
+      task.id,
+      `${verify.status}: ${verify.reason ?? ''} kind=${result.kind}`,
+      'system',
+    );
+
     const exhausted = attempt >= cfg.maxAttempts;
-    if (exhausted) {
-      // 仍受限 → paused 等人工；引擎错误 → failed（§6.3 / §7.1）
-      const status = result.kind === 'still-limited' ? 'paused' : 'failed';
-      tasks.finishFromRecovering(task.id, status, retryable, attempt, at(), at());
+    // 仍受限=额度没恢复，重试是设计内行为（§6.3），不受 autoResend 管；
+    // 其余未知/失败只在 autoResend 开启时自动重发。
+    const mayRetry =
+      !exhausted && (result.kind === 'still-limited' || cfg.autoResend === true);
+    if (mayRetry) {
+      const delay = backoffDelay(attempt, cfg.backoffBaseMs, cfg.backoffCapMs);
+      const backoffAt = new Date(this.deps.clock.now().getTime() + delay).toISOString();
+      const nextAt =
+        result.kind === 'still-limited'
+          ? this.stillLimitedNextAt(result.message, cfg.timezone, backoffAt)
+          : backoffAt;
+      tasks.finishFromRecovering(task.id, 'waiting', code, attempt, nextAt, at());
       this.deps.audit.log(
-        status === 'paused' ? 'task.paused' : 'task.failed',
+        'task.auto_resend',
         task.id,
-        `${retryable} attempts=${attempt}`,
+        `${code} attempts=${attempt}/${cfg.maxAttempts} next=${nextAt}`,
         'system',
       );
     } else {
-      const delay = backoffDelay(attempt, cfg.backoffBaseMs, cfg.backoffCapMs);
-      const nextAt = new Date(this.deps.clock.now().getTime() + delay).toISOString();
-      tasks.finishFromRecovering(task.id, 'waiting', retryable, attempt, nextAt, at());
+      tasks.finishFromRecovering(task.id, 'failed', code, attempt, at(), at());
+      this.deps.audit.log(
+        'task.failed',
+        task.id,
+        `${code} attempts=${attempt}/${cfg.maxAttempts}`,
+        'system',
+      );
       this.notify(task.id);
+      this.autoRemoveSession(task);
+    }
+    this.notify(task.id);
+  }
+
+  /**
+   * 仍受限时的下次尝试时刻：报错原文里带重置时刻（如「限额将在 10:57:09 重置」）
+   * 就排到该时刻（+2s 缓冲），避免在额度恢复前空转重试；解析不出或时刻已过则退回退避值。
+   */
+  private stillLimitedNextAt(message: string | null | undefined, tz: string, fallback: string): string {
+    const raw = message ? parseLimitMessage(message)?.resetAtRaw : null;
+    if (raw) {
+      try {
+        const iso = isSupportedTimezone(tz)
+          ? zonedTimeToUtc(raw, tz).toISOString()
+          : new Date(raw.replace(' ', 'T') + 'Z').toISOString();
+        const at = Date.parse(iso) + 2000;
+        if (Number.isFinite(at) && at > this.deps.clock.now().getTime()) return new Date(at).toISOString();
+      } catch {
+        /* 原文不可解析 → 退回退避 */
+      }
+    }
+    return fallback;
+  }
+
+  /**
+   * 完结即移除登记（2026-10-24 用户拍板）：自动化列表里的会话必须有任务在跑，
+   * 恢复完结（成功/失败）后自动清出列表。任务归档保留（迁移 003），历史记录不丢。
+   */
+  private autoRemoveSession(task: { session_row_id: string | null; id: string }): void {
+    const rowId = task.session_row_id;
+    if (!rowId) return;
+    try {
+      this.deps.sessionsService.remove(rowId);
+    } catch {
+      /* 已被并发移除 */
     }
   }
 
   /**
    * 重启对账（§7.3 崩溃对账，单位=叶）：
    *  - checking：无副作用 → 回 waiting 重排队。
-   *  - recovering：不能确定提交是否完成 → 先查本工具分支叶；
-   *    已落盘并核验 → resumed；否则 → paused（绝不重发）。
+   *  - recovering：先查本工具分支叶（转写为事实源）；已落盘并核验 → resumed；
+   *    否则按 autoResend：开 → 回 waiting 退避重发，关 → failed（一次未知即终止）。
    */
   async reconcileOnBoot(): Promise<ReconcileSummary> {
-    const { tasks, clock } = this.deps;
+    const { tasks, clock, settings } = this.deps;
     const summary: ReconcileSummary = {
       checkingBackToWaiting: 0,
       recoveringResumed: 0,
-      recoveringPaused: 0,
+      recoveringRequeued: 0,
+      recoveringFailed: 0,
     };
+    const cfg = settings.get();
 
     for (const t of tasks.byStatus('checking')) {
       if (tasks.checkingToWaiting(t.id, clock.now().toISOString())) {
@@ -216,8 +280,8 @@ export class ResumeScheduler {
     for (const t of tasks.byStatus('recovering')) {
       const at = clock.now().toISOString();
       if (!t.base_leaf_uuid || !t.prompt_sent) {
-        tasks.finishFromRecovering(t.id, 'paused', 'RESUME_RESULT_UNKNOWN', t.attempt_count, at, at);
-        summary.recoveringPaused++;
+        tasks.finishFromRecovering(t.id, 'failed', 'RESUME_RESULT_UNKNOWN', t.attempt_count, at, at);
+        summary.recoveringFailed++;
         this.notify(t.id);
         continue;
       }
@@ -227,7 +291,12 @@ export class ResumeScheduler {
         t.base_leaf_uuid,
         t.prompt_sent,
       );
-      if (verify.status === 'verified' && verify.leafUuid) {
+      // 与 runAttempt 同一判定：落盘的若是 429 仍受限轮次，绝不判 resumed（§6.3）
+      const stillLimited =
+        verify.status === 'verified' &&
+        !!verify.leafText &&
+        parseLimitMessage(verify.leafText) !== null;
+      if (verify.status === 'verified' && verify.leafUuid && !stillLimited) {
         const evidence = JSON.stringify({
           baseLeafUuid: t.base_leaf_uuid,
           ourTurnUuid: verify.ourTurnUuid,
@@ -236,10 +305,33 @@ export class ResumeScheduler {
         });
         if (tasks.markResumed(t.id, verify.leafUuid, evidence, at)) {
           summary.recoveringResumed++;
+          this.autoRemoveSession(t);
         }
+      } else if (stillLimited || cfg.autoResend === true) {
+        const delay = backoffDelay(t.attempt_count + 1, cfg.backoffBaseMs, cfg.backoffCapMs);
+        const backoffAt = new Date(clock.now().getTime() + delay).toISOString();
+        const nextAt = stillLimited
+          ? this.stillLimitedNextAt(verify.leafText, cfg.timezone, backoffAt)
+          : backoffAt;
+        tasks.finishFromRecovering(
+          t.id,
+          'waiting',
+          stillLimited ? 'STILL_LIMITED' : 'RESUME_RESULT_UNKNOWN',
+          t.attempt_count,
+          nextAt,
+          at,
+        );
+        this.deps.audit.log(
+          'task.auto_resend',
+          t.id,
+          `reconcile requeue next=${nextAt}`,
+          'system',
+        );
+        summary.recoveringRequeued++;
       } else {
-        tasks.finishFromRecovering(t.id, 'paused', 'RESUME_RESULT_UNKNOWN', t.attempt_count, at, at);
-        summary.recoveringPaused++;
+        tasks.finishFromRecovering(t.id, 'failed', 'RESUME_RESULT_UNKNOWN', t.attempt_count, at, at);
+        summary.recoveringFailed++;
+        this.autoRemoveSession(t);
       }
       this.notify(t.id);
     }

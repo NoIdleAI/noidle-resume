@@ -23,12 +23,12 @@ before(() => {
 
 after(() => env.cleanup());
 
-test('添加会话：身份核验通过，默认不启用（§9.2）', () => {
+test('添加会话：身份核验通过，加列表即启用（2026-10-24 用户拍板：白名单概念退役）', () => {
   const row = env.ctx.services.sessions.add({
     sessionId: fixture.sessionId,
     projectPath: fixture.projectPath,
   });
-  assert.equal(row.enabled, 0);
+  assert.equal(row.enabled, 1);
   assert.ok(row.display_name.length > 0);
 });
 
@@ -60,7 +60,11 @@ test('转写 cwd 与工作区不符 → SESSION_IDENTITY_UNVERIFIED', () => {
   );
 });
 
-test('未启用会话：事件落库但不建任务（§5.2）', () => {
+test('显式停用的会话：事件落库但不建任务（§5.2 语义保留，API 层兼容）', () => {
+  env.ctx.services.sessions.patch(
+    env.ctx.services.sessions.list()[0]!.id,
+    { enabled: false },
+  );
   plusOneHourWall = wallClockAhead(3600_000);
   const outcome = env.ctx.services.intake.handleTranscriptFrame(
     fixture.sessionId,

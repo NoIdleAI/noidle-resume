@@ -31,7 +31,7 @@ body {
 
 /* ===== 顶栏 ===== */
 header.top {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: center; gap: 18px;
   padding-bottom: 20px; margin-bottom: 22px;
   border-bottom: 1px solid var(--line);
 }
@@ -41,7 +41,6 @@ header.top {
   background: var(--acc); display: grid; place-items: center;
   color: #17130f; font-size: 12px; font-weight: 800;
 }
-.brand .for { color: var(--tx-3); font-weight: 400; font-size: 12.5px; margin-left: 2px; }
 .spacer { flex: 1; }
 .svc {
   display: flex; align-items: center; gap: 8px;
@@ -163,6 +162,14 @@ header.top {
 .sec-head h2 { font-size: 13.5px; font-weight: 650; color: var(--tx-2); letter-spacing: .3px; }
 .sec-head .cnt { font-family: var(--mono); font-size: 11px; color: var(--tx-3); }
 .sec-head .push2 { flex: 1; }
+.tabs { display: flex; gap: 4px; }
+.tab {
+  font: 13.5px var(--sans); font-weight: 650; letter-spacing: .3px; color: var(--tx-3);
+  background: none; border: none; border-radius: 8px; padding: 5px 12px; cursor: pointer;
+}
+.tab:hover { color: var(--tx-2); }
+.tab.on { color: var(--acc); background: rgba(224,120,90,.1); }
+.tab .cnt { font-family: var(--mono); font-size: 11px; font-weight: 400; margin-left: 2px; }
 .mini {
   font: 12px var(--sans); color: var(--tx-2); background: none;
   border: 1px solid var(--line-2); border-radius: 7px; padding: 4px 12px; cursor: pointer;
@@ -210,12 +217,13 @@ footer.foot .mono { font-size: 10.5px; }
 /* ===== 表单（阶段三扩展,沿用同语言） ===== */
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 11.5px; color: var(--tx-3); letter-spacing: .5px; margin-bottom: 5px; }
-.field input, .field select {
+.field input, .field select, .field textarea {
   width: 100%; font: 13px var(--mono); color: var(--tx);
   background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px;
   padding: 8px 12px; outline: none;
 }
-.field input:focus { border-color: rgba(224,120,90,.5); }
+.field input:focus, .field textarea:focus { border-color: rgba(224,120,90,.5); }
+.field textarea { resize: vertical; line-height: 1.5; }
 .field select:focus { border-color: rgba(224,120,90,.5); }
 .field .note { font-size: 11.5px; color: var(--tx-3); margin-top: 4px; }
 .field .note .mono { color: var(--tx-2); }
@@ -253,6 +261,60 @@ footer.foot .mono { font-size: 10.5px; }
 .form-foot { display: flex; align-items: center; gap: 18px; margin-top: 16px; }
 .form-foot .note { flex: 1; font-size: 11.5px; color: var(--tx-3); }
 .form-foot .btn { flex: none; }
+
+/* 监控选择器 + ALL 精简看板 + 终态事实行 */
+.mon-head { display: flex; align-items: center; gap: 14px; margin: 2px 0 12px; }
+.mon-head h2 { font-size: 14px; font-weight: 650; color: var(--tx-2); }
+.mon-head .push { flex: 1; }
+/* 监控下拉（复用 pick-* 语言，紧凑版：右对齐 + 面板比触发器宽） */
+.mon-pick { flex: none; width: 250px; margin-left: auto; }
+.mon-pick .pick-trigger { padding: 6px 12px; }
+.mon-pick .pick-panel { left: auto; right: 0; width: 320px; }
+.pick-item.cur { background: var(--acc-dim); }
+.pick-item.cur .t { color: var(--acc); }
+
+/* 自动化重发勾选行 */
+label.autoresend {
+  display: flex; align-items: center; gap: 9px; cursor: pointer;
+  font-size: 13px; color: var(--tx); letter-spacing: 0; margin-bottom: 0;
+}
+label.autoresend input[type="checkbox"] {
+  width: 15px; height: 15px; accent-color: var(--acc); cursor: pointer; flex: none;
+}
+.factline {
+  font-size: 12.5px; color: var(--tx-2); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+}
+/* ===== ALL 看板：按恢复流程分列的卡片看板 ===== */
+.board { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; align-items: start; }
+.bcol {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 150px;
+}
+.bcol-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px; }
+.bcol-title { font-size: 13px; font-weight: 700; color: var(--tx-2); letter-spacing: .3px; }
+.bcol-cnt {
+  font-size: 11px; color: var(--acc); background: rgba(224,120,90,.12);
+  border-radius: 999px; padding: 1px 8px;
+}
+.bcol-hint { margin-left: auto; font-size: 11px; color: var(--tx-3); }
+.bcol-body { display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow-y: auto; padding-right: 10px; }
+.bcol-body::-webkit-scrollbar { width: 6px; }
+.bcol-body::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
+.bcard {
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px;
+  padding: 9px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+}
+.bcard:hover { border-color: rgba(224,120,90,.5); }
+.bcard-nm { font-weight: 650; font-size: 13px; color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bcard-meta { display: flex; gap: 10px; font-size: 11.5px; }
+.bcard-reset { color: var(--tx-3); }
+.bcard-remain { color: var(--acc); font-weight: 650; }
+.bcard-try { font-size: 11px; color: var(--tx-3); }
+.bcard-empty {
+  border: 1px dashed var(--line-2); border-radius: 10px; padding: 18px 0;
+  text-align: center; font-size: 11.5px; color: var(--tx-3);
+}
 .form-error {
   font-size: 12.5px; color: var(--err); background: rgba(229,105,122,.08);
   border: 1px solid rgba(229,105,122,.3); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;

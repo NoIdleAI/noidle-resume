@@ -11,12 +11,15 @@ GLM Coding Plan 5 小时限额到点后，自动续跑 VS Code 侧边栏 Claude 
   - SQLite 持久化（WAL + 迁移）、会话白名单、限额解析、任务状态机、串行调度、取消与重启对账、本地 API + WebSocket
 - 🚧 **阶段三：Web 管理页面（本仓库当前交付）**
   - Vue3 + Vite 管理面（`apps/web`），视觉语言照定版原型稿 `../原型图/auto-resume-01.html`（深色值守室 · 暖珊瑚单强调 · 等宽承载数据）
-  - 四页：总览（主任务卡=倒计时/5h 窗口/证据块/五步时间线 + 白名单 + 日志尾）、会话（登记/开关/移除/人工登记限额）、任务详情（§10.3 六问）、设置与日志
-  - 登记不必手抠 UUID：自动扫描本机转写根近 24 小时会话做自绘下拉，选中即填充；标题与侧边栏同源（转写 `ai-title` 帧 > summary > 首条用户消息），工作区取帧内 cwd 与核验同源
+  - 四页：总览（监控选择器：单会话详情卡 / ALL 精简看板·同批重置分组 + 自动化列表 + 日志尾）、会话（自动化列表：下拉选择加入即守护 / 移除 / 补录撞限）、任务详情（§10.3 六问）、设置与日志
+  - 登记不必手抠 UUID：自动扫描本机转写根近 24 小时会话做自绘下拉，只收 `entrypoint=claude-vscode`（VS Code 侧边栏会话）；标题与侧边栏同源（转写 `ai-title` 帧 > summary > 首条用户消息）
+  - 补录撞限支持粘贴限额提示原文自动解析重置时刻（`POST /api/v1/parse-limit`），手动输入保留；「加入列表即守护」，无启用开关概念
+  - **「暂停」概念退役（2026-10-24）**：任务级手动动词（重试/暂停/取消）全部下线——是否自动重发由设置页「自动化重发」(`autoResend`，默认开) 决定；停止守护=会话页移除（连带取消任务）；重新入队=会话页补录撞限。任务详情页纯只读（六问+证据）
+  - **结算以转写为事实源**：续跑进程怎么退场（正常/超时/被杀/不退场）都不影响判定——轮次落盘并过血统核验即 resumed；引擎换硬结算执行（进程攥住 stdio 不退也能强制落定）
   - 实时推送：WS `task.changed` / `event.detected` / `session.changed`；令牌门登录 → HttpOnly Cookie（WS 同源免头）
   - 服务端直接托管 `apps/web/dist`（`npm run build` 后单进程即可用）；开发态 `npm run dev:web`（vite 代理 /api 与 WS）
   - 新增 API：`POST /api/v1/tasks/:id/pause`；cancel 支持搁置 paused/failed
-  - 验收：59/59 单元+集成测试 + `scripts/e2e-web.mjs` 真浏览器 E2E 全链 12 步（门→下拉发现→登记→启用→限额→值守→恢复→详情→设置→转写事实，零真额度）
+  - 验收：61/61 单元+集成测试 + `scripts/e2e-web.mjs` 真浏览器 E2E 全链 13 步（门→下拉发现→登记→限额→值守→恢复→详情→设置→转写事实，零真额度）；真机实弹验证：真 claude 引擎续跑「你好」会话成功（叶核验通过）
 - ⬜ 阶段四：安全、兼容性与发布
 
 ## 快速开始
@@ -44,6 +47,7 @@ npm run typecheck
 | 机制 | 实现位置 |
 | --- | --- |
 | 限额事件源 = 转写 `api_error` 帧（§6.1） | `modules/limit/detector.ts` + `modules/watcher/` |
+| 头部读窗 = 行数优先 + 字节兜底（大帧顶前事故两例） | `adapters/vscode-claude/transcriptLocator.ts` |
 | 登记下拉 = 只读扫描转写根最近会话（`entrypoint=claude-vscode` 才收，不入库） | `modules/discover/discoveryService.ts` |
 | 重置时刻按配置时区解析（§6.3） | `modules/limit/timezone.ts` |
 | 冷会话守卫 `pgrep --resume=<sid>`（§5.1-11） | `modules/resume/coldGuard.ts` |

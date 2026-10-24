@@ -52,7 +52,7 @@ export const heroTask = computed<ResumeTaskDto | null>(() => {
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
   if (active.length > 0) return active[0]!;
   const trouble = ts
-    .filter((t) => t.status === 'paused' || t.status === 'failed')
+    .filter((t) => t.status === 'failed')
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   if (trouble.length > 0) return trouble[0]!;
   return [...ts].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
@@ -61,9 +61,20 @@ export const heroTask = computed<ResumeTaskDto | null>(() => {
 export const counters = computed(() => ({
   enabled: store.sessions.filter((s) => s.enabled).length,
   waiting: store.tasks.filter((t) => ACTIVE_ORDER.includes(t.status)).length,
-  paused: store.tasks.filter((t) => t.status === 'paused').length,
   failed: store.tasks.filter((t) => t.status === 'failed').length,
 }));
+
+/** 活动任务（值守中）：监控下拉、总览/会话页自动化列表、ALL 看板统一用它，一处过滤处处同步。 */
+export const activeTasks = computed(() =>
+  store.tasks.filter((t) => ACTIVE_ORDER.includes(t.status)),
+);
+
+/** 历史记录：已完结任务（成功/失败/取消），按完结时间倒序。 */
+export const historyTasks = computed(() =>
+  store.tasks
+    .filter((t) => ['resumed', 'failed', 'cancelled'].includes(t.status))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+);
 
 export const eventById = computed(() => {
   const m = new Map<string, UsageEventDto>();
@@ -81,6 +92,7 @@ export const settings = computed<SettingsDto>(
       resumeAttemptTimeoutMs: 900_000,
       resumePromptTemplate: '继续 [car:auto {taskId}]',
       concurrency: 1,
+      autoResend: true,
     },
 );
 

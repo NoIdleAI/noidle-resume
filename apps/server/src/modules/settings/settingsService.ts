@@ -12,6 +12,7 @@ export const SETTINGS_DEFAULTS: SettingsDto = {
   resumeAttemptTimeoutMs: 900_000,
   resumePromptTemplate: '继续 [car:auto {taskId}]',
   concurrency: 1,
+  autoResend: true,
 };
 
 const NUMERIC_KEYS = [
@@ -59,6 +60,9 @@ export class SettingsService {
       }
     }
     next.concurrency = Math.min(3, Math.max(1, Math.round(next.concurrency)));
+    if (typeof next.autoResend !== 'boolean') {
+      throw validationError('autoResend 必须为布尔值');
+    }
     if (
       typeof next.resumePromptTemplate !== 'string' ||
       !next.resumePromptTemplate.includes('{taskId}')
