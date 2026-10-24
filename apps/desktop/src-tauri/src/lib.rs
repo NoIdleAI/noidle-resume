@@ -185,7 +185,14 @@ fn open_dashboard(app: &AppHandle, port: u16) {
             let _ = w.set_focus();
             return;
         }
-        let url: tauri::Url = format!("http://127.0.0.1:{port}/").parse().unwrap();
+        // 免登录：壳持有令牌，经 #token= 传给前端令牌门（hash 不发往服务端，用后即清）
+        let mut url_s = format!("http://127.0.0.1:{port}/");
+        let paths = app.state::<AppPathsState>().0.clone();
+        if let Some(t) = read_token(&paths.data_dir) {
+            url_s.push_str("#token=");
+            url_s.push_str(&t);
+        }
+        let url: tauri::Url = url_s.parse().unwrap();
         if let Err(e) =
             WebviewWindowBuilder::new(&app, "dashboard", WebviewUrl::External(url))
                 .title("NoIdle Resume")

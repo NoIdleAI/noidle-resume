@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { ApiError } from '../api/client';
 import { initAuth, loginWithToken } from '../stores/data';
 
@@ -25,6 +25,15 @@ async function submit(): Promise<void> {
     busy.value = false;
   }
 }
+
+// 桌面壳传入的免登录令牌：#token=xxx（hash 不发往服务端，用后即清）
+onMounted(() => {
+  const m = /^#token=([0-9a-f]{64})$/.exec(location.hash);
+  if (!m?.[1]) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  token.value = m[1];
+  void submit();
+});
 </script>
 
 <template>
