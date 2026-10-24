@@ -6,8 +6,8 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::{AutoLaunchManager, MacosLauncher};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
@@ -150,7 +150,8 @@ fn on_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     let port: u16 = app.state::<PortState>().0;
     let paths = app.state::<AppPathsState>().0.clone();
     match event.id().as_ref() {
-        "open" => {
+        "open" => open_dashboard(app, port),
+        "browser" => {
             let url = format!("http://127.0.0.1:{port}/");
             let _ = app.opener().open_url(url, None::<&str>);
         }
@@ -171,6 +172,30 @@ fn on_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         }
         _ => {}
     }
+}
+
+/// 打开（或唤出）管理窗口：内嵌本地服务的 Web 界面。
+/// 关窗只是隐藏（on_window_event 拦截 CloseRequested），应用留在托盘。
+/// 窗口必须在主线程创建（健康检查线程等后台调用经 run_on_main_thread 派发）。
+fn open_dashboard(app: &AppHandle, port: u16) {
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        if let Some(w) = app.get_webview_window("dashboard") {
+            let _ = w.show();
+            let _ = w.set_focus();
+            return;
+        }
+        let url: tauri::Url = format!("http://127.0.0.1:{port}/").parse().unwrap();
+        if let Err(e) =
+            WebviewWindowBuilder::new(&app, "dashboard", WebviewUrl::External(url))
+                .title("NoIdle Resume")
+                .inner_size(1280.0, 860.0)
+                .min_inner_size(960.0, 620.0)
+                .build()
+        {
+            eprintln!("打开管理窗口失败: {e}");
+        }
+    });
 }
 
 pub fn run() {
@@ -202,15 +227,21 @@ pub fn run() {
 
             spawn_server(app.handle(), port, &paths)?;
 
-            // 服务就绪检测（仅记录，健康失败不影响托盘可用性）
-            std::thread::spawn(move || {
-                if !wait_healthy(port, Duration::from_secs(20)) {
-                    eprintln!("sidecar 健康检查超时（端口 {port}）");
+            // 服务就绪后自动弹出管理窗口（首次启动即见界面）
+            std::thread::spawn({
+                let app = app.handle().clone();
+                move || {
+                    if wait_healthy(port, Duration::from_secs(20)) {
+                        open_dashboard(&app, port);
+                    } else {
+                        eprintln!("sidecar 健康检查超时（端口 {port}）");
+                    }
                 }
             });
 
             // 托盘
-            let open = MenuItemBuilder::with_id("open", "打开管理页").build(app)?;
+            let open = MenuItemBuilder::with_id("open", "打开管理窗口").build(app)?;
+            let browser = MenuItemBuilder::with_id("browser", "在浏览器打开").build(app)?;
             let copy_token = MenuItemBuilder::with_id("copy_token", "复制访问令牌").build(app)?;
             let autostart_item = tauri::menu::CheckMenuItemBuilder::with_id("autostart", "登录时启动")
                 .checked(app.state::<AutoLaunchManager>().is_enabled().unwrap_or(false))
@@ -218,6 +249,7 @@ pub fn run() {
             let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&open)
+                .item(&browser)
                 .item(&copy_token)
                 .item(&autostart_item)
                 .separator()
@@ -227,6 +259,17 @@ pub fn run() {
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("NoIdle Resume")
                 .menu(&menu)
+                .show_menu_on_left_click(false) // 左键开窗口，右键出菜单
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        open_dashboard(tray.app_handle(), tray.app_handle().state::<PortState>().0);
+                    }
+                })
                 .on_menu_event(|app, event| {
                     // 自启项：勾选态由 CheckMenuItem 自身切换，这里同步开/关
                     if event.id().as_ref() == "autostart" {
@@ -239,6 +282,13 @@ pub fn run() {
                 })
                 .build(app)?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // 关窗 = 隐藏：应用继续留在菜单栏，左键托盘图标秒开
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
         })
         .build(tauri::generate_context!())
         .expect("Tauri 初始化失败")

@@ -20,21 +20,20 @@ function insideRounded(x, y) {
   return rx * rx + ry * ry <= R * R;
 }
 
-// N 字形：左竖条 + 右竖条 + 对角（用横向步进近似），坐标为 0..1 相对字框
+// N 字形：左竖 + 右竖 + 对角线（按垂直距离取等粗笔画），坐标 0..1 相对字框。
+// 对角线与竖笔等粗（用点到直线距离，而非竖直带），字形更匀称。
 function insideN(x, y) {
   const u = x / S;
   const v = y / S;
-  // 字框
-  const x0 = 0.26, x1 = 0.74, y0 = 0.22, y1 = 0.78;
+  const x0 = 0.30, x1 = 0.70, y0 = 0.29, y1 = 0.71; // 字框
   if (u < x0 || u > x1 || v < y0 || v > y1) return false;
-  const w = 0.085; // 竖条宽
-  if (u <= x0 + w) return true; // 左竖
-  if (u >= x1 - w) return true; // 右竖
-  // 对角：从左竖顶部连到右竖底部，带宽 t
-  const t = 0.075;
-  const k = (u - x0 - w) / (x1 - w - (x0 + w)); // 0..1 横向进度
-  const cy = y0 + k * (y1 - y0); // 对角中心线
-  return Math.abs(v - cy) <= t / 2 + 0.01;
+  const w = 0.068; // 竖笔宽
+  if (u <= x0 + w || u >= x1 - w) return true;
+  // 对角线：左竖顶端 → 右竖底端，垂直厚度与竖笔一致
+  const ax = x0 + w, ay = y0, bx = x1 - w, by = y1;
+  const dx = bx - ax, dy = by - ay;
+  const dist = Math.abs((u - ax) * dy - (v - ay) * dx) / Math.hypot(dx, dy);
+  return dist <= w / 2;
 }
 
 for (let y = 0; y < S; y++) {
