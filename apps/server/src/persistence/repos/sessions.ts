@@ -63,7 +63,7 @@ export class SessionsRepo {
   }
 
   list(): SessionRow[] {
-    return this.stmtList.all() as SessionRow[];
+    return this.stmtList.all() as unknown as SessionRow[];
   }
 
   byId(id: string): SessionRow | undefined {

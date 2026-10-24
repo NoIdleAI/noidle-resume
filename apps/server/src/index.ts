@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   const app = buildApp(ctx);
   await app.listen({ host: config.host, port: config.port });
 
-  console.log(`NoIdle Auto Resume 已启动: http://${config.host}:${config.port}`);
+  console.log(`NoIdle Resume 已启动: http://${config.host}:${config.port}`);
   console.log(`本机访问令牌: ${ctx.token}`);
   console.log(`(令牌存于 ${config.tokenFile}，权限 0600；数据目录 ${config.dataDir})`);
 

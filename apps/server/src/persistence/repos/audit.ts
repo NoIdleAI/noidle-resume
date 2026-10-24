@@ -42,6 +42,6 @@ export class AuditRepo {
   }
 
   list(limit: number, offset: number): AuditLogRow[] {
-    return this.stmtList.all({ limit, offset }) as AuditLogRow[];
+    return this.stmtList.all({ limit, offset }) as unknown as AuditLogRow[];
   }
 }

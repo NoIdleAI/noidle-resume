@@ -1,4 +1,4 @@
-import type { Db } from '../db.ts';
+import { isUniqueViolation, type Db } from '../db.ts';
 
 export interface ResumeTaskRow {
   id: string;
@@ -194,12 +194,7 @@ export class TasksRepo {
       return true;
     } catch (err) {
       // idx_tasks_active 部分唯一索引：同会话已有一个活动任务（§7.3）
-      if (
-        err instanceof Error &&
-        (err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE'
-      ) {
-        return false;
-      }
+      if (isUniqueViolation(err)) return false;
       throw err;
     }
   }
@@ -209,7 +204,7 @@ export class TasksRepo {
   }
 
   list(limit: number, offset: number): TaskWithSessionRow[] {
-    return this.stmtList.all({ limit, offset }) as TaskWithSessionRow[];
+    return this.stmtList.all({ limit, offset }) as unknown as TaskWithSessionRow[];
   }
 
   activeBySessionRowId(sessionRowId: string): ResumeTaskRow | undefined {
@@ -219,16 +214,16 @@ export class TasksRepo {
   }
 
   due(nowIso: string, limit: number): TaskWithSessionRow[] {
-    return this.stmtDue.all({ now: nowIso, limit }) as TaskWithSessionRow[];
+    return this.stmtDue.all({ now: nowIso, limit }) as unknown as TaskWithSessionRow[];
   }
 
   byStatus(status: string): ResumeTaskRow[] {
-    return this.stmtByStatus.all(status) as ResumeTaskRow[];
+    return this.stmtByStatus.all(status) as unknown as ResumeTaskRow[];
   }
 
   /** 清空历史归档（终态任务），返回删除条数；审计日志不受影响。 */
   clearHistory(): number {
-    return this.stmtClearHistory.run().changes;
+    return Number(this.stmtClearHistory.run().changes);
   }
 
   /** waiting → checking。 */

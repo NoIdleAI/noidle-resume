@@ -1,4 +1,4 @@
-import type { Db } from '../db.ts';
+import { isUniqueViolation, type Db } from '../db.ts';
 
 export interface UsageEventRow {
   id: string;
@@ -87,14 +87,6 @@ export class EventsRepo {
   }
 
   list(limit: number, offset: number): UsageEventRow[] {
-    return this.stmtList.all({ limit, offset }) as UsageEventRow[];
+    return this.stmtList.all({ limit, offset }) as unknown as UsageEventRow[];
   }
-}
-
-export function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    'code' in err &&
-    (err as { code?: string }).code?.startsWith('SQLITE_CONSTRAINT') === true
-  );
 }
