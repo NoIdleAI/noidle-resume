@@ -12,6 +12,7 @@
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-✓-003B57?style=flat-square&logo=sqlite&logoColor=white)
 ![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri&logoColor=black)
+![License](https://img.shields.io/badge/License-Apache_2.0-0969DA?style=flat-square)
 ![GitHub](https://img.shields.io/badge/GitHub-NoIdleAI-181717?style=flat-square&logo=github)
 
 [✨ 特性亮点](#-特性亮点) · [🗺️ 路线图](#️-路线图) · [🚀 快速开始](#-快速开始) · [⚙️ 核心机制](#️-核心机制) · [🔒 安全与隐私](#-安全与隐私)
