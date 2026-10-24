@@ -9,7 +9,7 @@ import type {
   SessionDto,
   SettingsDto,
   UsageEventDto,
-} from '@noidle/auto-resume-contracts';
+} from '@noidle/resume-contracts';
 
 /** 带活动任务视图的会话（GET /api/v1/sessions 行）。 */
 export interface SessionWithTask extends SessionDto {

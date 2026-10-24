@@ -1,5 +1,5 @@
 {
-  "name": "@noidle/auto-resume-contracts",
+  "name": "@noidle/resume-contracts",
   "version": "0.1.0",
   "private": true,
   "type": "module",

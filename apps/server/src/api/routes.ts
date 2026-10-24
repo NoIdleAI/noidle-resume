@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { ManualUsageLimitRequest } from '@noidle/auto-resume-contracts';
+import type { ManualUsageLimitRequest } from '@noidle/resume-contracts';
 import type { AppContext } from '../context.ts';
 import { BizError, validationError } from '../shared/errors.ts';
 import { toAuditDto, toSessionDto, toTaskDto, toUsageEventDto } from '../shared/mappers.ts';
@@ -17,7 +17,7 @@ export function registerRoutes(app: FastifyInstance, ctx: AppContext): void {
 
   app.get('/api/v1/health', async () => ({
     ok: true,
-    service: 'noidle-auto-resume',
+    service: 'noidle-resume',
     time: ctx.clock.now().toISOString(),
   }));
 

@@ -36,7 +36,7 @@ async function submit(): Promise<void> {
       <div style="font-size: 13px; color: var(--tx-2); line-height: 1.8; margin-bottom: 16px">
         本地值守台需要访问令牌。启动后台时会打印在终端，也存于：
         <div class="mono" style="font-size: 11.5px; color: var(--tx-3); margin-top: 6px; word-break: break-all">
-          ~/Library/Application Support/noidle-auto-resume/token.txt
+          ~/Library/Application Support/noidle-resume/token.txt
         </div>
       </div>
       <div v-if="error" class="form-error">{{ error }}</div>

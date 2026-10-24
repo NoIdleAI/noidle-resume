@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { UsageEventDto } from '@noidle/auto-resume-contracts';
+import type { UsageEventDto } from '@noidle/resume-contracts';
 import { fmtMDHM } from '../stores/format';
 import { settings } from '../stores/data';
 

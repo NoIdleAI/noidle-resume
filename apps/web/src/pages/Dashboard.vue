@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import type { ResumeTaskDto } from '@noidle/auto-resume-contracts';
+import type { ResumeTaskDto } from '@noidle/resume-contracts';
 import { humanizeError, ACTION_LABELS } from '../api/humanize';
 import { api } from '../api/client';
 import { activeTasks, eventById, heroTask, historyTasks, refreshTasks, settings, store } from '../stores/data';

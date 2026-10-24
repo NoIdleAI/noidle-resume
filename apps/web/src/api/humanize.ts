@@ -1,4 +1,4 @@
-import type { TaskStatus } from '@noidle/auto-resume-contracts';
+import type { TaskStatus } from '@noidle/resume-contracts';
 
 /** 错误码 → 人话（设计书 §9.4：按码展示原因，不透堆栈）。 */
 const ERROR_HINTS: Record<string, string> = {

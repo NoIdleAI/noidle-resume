@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { WsEvent, WsEventType } from '@noidle/auto-resume-contracts';
+import type { WsEvent, WsEventType } from '@noidle/resume-contracts';
 
 /** 服务内事件总线：模块只管发，API 层订阅转 WebSocket 推送。 */
 export class EventBus {

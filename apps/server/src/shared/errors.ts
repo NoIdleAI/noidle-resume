@@ -1,4 +1,4 @@
-import type { ErrorCode } from '@noidle/auto-resume-contracts';
+import type { ErrorCode } from '@noidle/resume-contracts';
 
 /** 业务错误：路由层统一转成 { error: { code, message, requestId } }（设计书 §9.4）。 */
 export class BizError extends Error {

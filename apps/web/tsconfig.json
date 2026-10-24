@@ -11,7 +11,7 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@noidle/auto-resume-contracts": ["../../packages/contracts/src/index.ts"]
+      "@noidle/resume-contracts": ["../../packages/contracts/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "vite.config.ts"]

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
-import type { DiscoveredSessionDto } from '@noidle/auto-resume-contracts';
+import type { DiscoveredSessionDto } from '@noidle/resume-contracts';
 import type { SessionWithTask } from '../api/client';
 import { api, ApiError } from '../api/client';
 import { humanizeError } from '../api/humanize';

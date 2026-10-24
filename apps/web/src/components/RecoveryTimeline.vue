@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { ResumeTaskDto, UsageEventDto } from '@noidle/auto-resume-contracts';
+import type { ResumeTaskDto, UsageEventDto } from '@noidle/resume-contracts';
 import { buildTimeline } from '../stores/timeline';
 import { settings } from '../stores/data';
 

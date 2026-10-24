@@ -5,7 +5,7 @@ import type {
   SettingsDto,
   UsageEventDto,
   WsEvent,
-} from '@noidle/auto-resume-contracts';
+} from '@noidle/resume-contracts';
 import {
   api,
   currentToken,

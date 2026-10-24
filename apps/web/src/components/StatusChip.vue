@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { TaskStatus } from '@noidle/auto-resume-contracts';
+import type { TaskStatus } from '@noidle/resume-contracts';
 import { STATUS_CHIP } from '../api/humanize';
 
 const props = defineProps<{ status: TaskStatus }>();

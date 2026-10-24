@@ -7,7 +7,7 @@ import type {
   SessionDto,
   TaskStatus,
   UsageEventDto,
-} from '@noidle/auto-resume-contracts';
+} from '@noidle/resume-contracts';
 import type { SessionRow } from '../persistence/repos/sessions.ts';
 import type { UsageEventRow } from '../persistence/repos/events.ts';
 import type { ResumeTaskRow, TaskWithSessionRow } from '../persistence/repos/tasks.ts';

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { ManualUsageLimitRequest, Provider } from '@noidle/auto-resume-contracts';
+import type { ManualUsageLimitRequest, Provider } from '@noidle/resume-contracts';
 import type { Clock } from '../../shared/clock.ts';
 import { newId } from '../../shared/ids.ts';
 import { redact } from '../../shared/redact.ts';

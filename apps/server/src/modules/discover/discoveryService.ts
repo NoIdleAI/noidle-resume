@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { DiscoveredSessionDto } from '@noidle/auto-resume-contracts';
+import type { DiscoveredSessionDto } from '@noidle/resume-contracts';
 import type { SessionsRepo } from '../../persistence/repos/sessions.ts';
 import { readHeadLines } from '../../adapters/vscode-claude/transcriptLocator.ts';
 

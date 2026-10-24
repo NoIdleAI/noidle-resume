@@ -1,4 +1,4 @@
-import type { SettingsDto } from '@noidle/auto-resume-contracts';
+import type { SettingsDto } from '@noidle/resume-contracts';
 import type { SettingsRepo } from '../../persistence/repos/settings.ts';
 import type { Clock } from '../../shared/clock.ts';
 import { validationError } from '../../shared/errors.ts';

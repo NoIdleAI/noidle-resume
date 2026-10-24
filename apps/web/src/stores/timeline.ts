@@ -1,4 +1,4 @@
-import type { ResumeTaskDto, UsageEventDto } from '@noidle/auto-resume-contracts';
+import type { ResumeTaskDto, UsageEventDto } from '@noidle/resume-contracts';
 import { fmtHM } from './format';
 
 export interface TimelineStep {

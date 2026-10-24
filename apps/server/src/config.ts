@@ -19,7 +19,7 @@ export interface AppConfig {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const dataDir =
     env.CAR_DATA_DIR ??
-    path.join(os.homedir(), 'Library', 'Application Support', 'noidle-auto-resume');
+    path.join(os.homedir(), 'Library', 'Application Support', 'noidle-resume');
   return {
     dataDir,
     dbFile: path.join(dataDir, 'car.db'),

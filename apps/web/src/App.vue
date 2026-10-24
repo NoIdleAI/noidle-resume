@@ -25,6 +25,6 @@ import TokenGate from './pages/TokenGate.vue';
 
     <router-view />
 
-    <footer class="foot">本地优先 · 数据不出本机 · <span class="mono">noidle-auto-resume v0.1</span></footer>
+    <footer class="foot">本地优先 · 数据不出本机 · <span class="mono">noidle-resume v0.1</span></footer>
   </div>
 </template>

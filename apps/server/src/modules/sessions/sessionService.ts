@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AddSessionRequest, PatchSessionRequest, Provider } from '@noidle/auto-resume-contracts';
+import type { AddSessionRequest, PatchSessionRequest, Provider } from '@noidle/resume-contracts';
 import type { Clock } from '../../shared/clock.ts';
 import { newId } from '../../shared/ids.ts';
 import { BizError, notFound, validationError } from '../../shared/errors.ts';
