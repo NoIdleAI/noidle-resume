@@ -1,28 +1,44 @@
+<div align="center">
+
 # NoIdle Resume
 
-GLM Coding Plan 5 小时限额到点后，自动续跑 VS Code 侧边栏 Claude Code 会话的**本地独立小工具**。
+**GLM Coding Plan 限额到点后，自动续跑 VS Code 侧边栏 Claude Code 会话的本地工具**
 
-设计书：《../限额恢复设计方案01.md》（2026-10-23 真机定案版）。与 NoIdle Orbit 无从属关系。
+<em>本地值守 · 转写事实源 · 自动重发 · 零真额度测试</em>
 
-## 当前进度
+![version](https://img.shields.io/badge/version-0.1.0-0969DA?style=flat-square)
+![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522.13-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Vue](https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-✓-003B57?style=flat-square&logo=sqlite&logoColor=white)
+![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri&logoColor=black)
+![GitHub](https://img.shields.io/badge/GitHub-NoIdleAI-181717?style=flat-square&logo=github)
 
-- ✅ 阶段一：技术验证收官（URI 判死 / 转写=事件源 / CLI headless 续跑 / 冷热矩阵，见设计书附录 A）
-- ✅ 阶段二：本地后台与任务引擎
-  - SQLite 持久化（WAL + 迁移）、会话白名单、限额解析、任务状态机、串行调度、取消与重启对账、本地 API + WebSocket
-- 🚧 **阶段三：Web 管理页面（本仓库当前交付）**
-  - Vue3 + Vite 管理面（`apps/web`），视觉语言照定版原型稿 `../原型图/auto-resume-01.html`（深色值守室 · 暖珊瑚单强调 · 等宽承载数据）
-  - 四页：总览（监控选择器：单会话详情卡 / ALL 精简看板·同批重置分组 + 自动化列表 + 日志尾）、会话（自动化列表：下拉选择加入即守护 / 移除 / 补录撞限）、任务详情（§10.3 六问）、设置与日志
-  - 登记不必手抠 UUID：自动扫描本机转写根近 24 小时会话做自绘下拉，只收 `entrypoint=claude-vscode`（VS Code 侧边栏会话）；标题与侧边栏同源（转写 `ai-title` 帧 > summary > 首条用户消息）
-  - 补录撞限支持粘贴限额提示原文自动解析重置时刻（`POST /api/v1/parse-limit`），手动输入保留；「加入列表即守护」，无启用开关概念
-  - **「暂停」概念退役（2026-10-24）**：任务级手动动词（重试/暂停/取消）全部下线——是否自动重发由设置页「自动化重发」(`autoResend`，默认开) 决定；停止守护=会话页移除（连带取消任务）；重新入队=会话页补录撞限。任务详情页纯只读（六问+证据）
-  - **结算以转写为事实源**：续跑进程怎么退场（正常/超时/被杀/不退场）都不影响判定——轮次落盘并过血统核验即 resumed；引擎换硬结算执行（进程攥住 stdio 不退也能强制落定）
-  - 实时推送：WS `task.changed` / `event.detected` / `session.changed`；令牌门登录 → HttpOnly Cookie（WS 同源免头）
-  - 服务端直接托管 `apps/web/dist`（`npm run build` 后单进程即可用）；开发态 `npm run dev:web`（vite 代理 /api 与 WS）
-  - 新增 API：`POST /api/v1/tasks/:id/pause`；cancel 支持搁置 paused/failed
-  - 验收：61/61 单元+集成测试 + `scripts/e2e-web.mjs` 真浏览器 E2E 全链 13 步（门→下拉发现→登记→限额→值守→恢复→详情→设置→转写事实，零真额度）；真机实弹验证：真 claude 引擎续跑「你好」会话成功（叶核验通过）
-- ⬜ 阶段四：安全、兼容性与发布
+[✨ 特性亮点](#-特性亮点) · [🗺️ 路线图](#️-路线图) · [🚀 快速开始](#-快速开始) · [⚙️ 核心机制](#️-核心机制) · [🔒 安全与隐私](#-安全与隐私)
 
-## 快速开始
+</div>
+
+---
+
+## ✨ 特性亮点
+
+- 🔄 **自动续跑** — 限额 `api_error` 帧实时检测，重置时刻一到自动以 headless CLI 续跑会话，全程零人工
+- 📡 **转写为事实源** — 结算只认转写落盘并过血统核验；续跑进程正常退出、超时、被杀甚至不退场，都不影响判定
+- 🖥️ **值守台管理面** — Vue3 深色值守室：总览看板、会话页、任务详情六问、设置与日志四页；登记会话自动扫描转写根，免手抠 UUID
+- 🔒 **本地与安全** — 只监听 `127.0.0.1`，令牌门 + HttpOnly Cookie；恢复引擎显式 `--permission-mode default`，绝不开危险模式
+- 🧪 **零真额度验证** — 61/61 单元 + 集成测试、真浏览器 E2E 全链 13 步（假引擎演练），测试不烧一分钟额度
+- 📦 **Mac 托盘壳** — Tauri v2 菜单栏常驻：单文件 sidecar、拉起/收割服务、开机自启、退出无孤儿进程
+
+## 🗺️ 路线图
+
+- ✅ **阶段一 · 技术验证** — 限额事件源、会话身份与转写定位、headless 续跑链路、冷热会话判据
+- ✅ **阶段二 · 后台与任务引擎** — SQLite 持久化（WAL + 迁移）、限额解析、任务状态机、串行调度、本地 API + WebSocket
+- 🚧 **阶段三 · 管理面与桌面壳（当前）** — Web 四页值守台、会话自动发现与登记、转写硬结算、Mac 托盘壳
+- ⬜ **阶段四 · 安全加固与发布** — 兼容性扩展、打包分发
+
+## 🚀 快速开始
+
+环境要求：Node.js ≥ 22.13。
 
 ```bash
 npm install
@@ -36,9 +52,13 @@ node scripts/e2e-web.mjs   # Web 管理面真浏览器 E2E（需系统 Chrome，
 npm run typecheck
 ```
 
-启动后控制台打印本机访问令牌（也存于数据目录 `token.txt`，0600）。浏览器打开 `http://127.0.0.1:7842`，粘贴令牌进入值守台。
+启动后控制台打印本机访问令牌（同时写入数据目录 `token.txt`，权限 0600）。浏览器打开 `http://127.0.0.1:7842`，粘贴令牌进入值守台。
 
-## Mac 应用（Tauri 托盘壳）
+环境变量：`CAR_DATA_DIR`（数据目录）、`CAR_PROJECTS_ROOT`（转写根，默认 `~/.claude/projects`）、`CAR_CLAUDE_BIN`、`CAR_HOST`、`CAR_PORT`。
+
+演练模式：把 `CAR_PROJECTS_ROOT` 指向真实转写根并配假引擎时，给假引擎加 `CAR_FAKE_NOWRITE=1`（`scripts/fake-claude.mjs` 只输出成功结果、绝不向转写落帧，血统核验会诚实失败）。注意 `@fastify/static` 在启动时挂静态路由——**重建 dist 后需重启进程**。
+
+## 🍃 Mac 应用（Tauri 托盘壳）
 
 无原生模块的本地服务编译为单文件 sidecar（bun），Tauri v2 壳负责菜单栏常驻、拉起/收割服务、开机自启：
 
@@ -53,43 +73,65 @@ cd apps/desktop && npx tauri build    # 产出 .app + .dmg
 产物：`apps/desktop/src-tauri/target/release/bundle/{macos,dmg}/`。
 托盘菜单：打开管理页 / 复制访问令牌 / 登录时启动 / 退出；纯菜单栏应用（不占 Dock）。
 数据目录与服务端一致（`~/Library/Application Support/noidle-resume`）；sidecar 随壳退出被收割，无孤儿进程。
+
 注意：使用 .app 时请关闭开发态服务（`npm run dev`），避免两个调度器共用同一数据库。
 
-环境变量：`CAR_DATA_DIR`（数据目录）、`CAR_PROJECTS_ROOT`（转写根，默认 `~/.claude/projects`）、`CAR_CLAUDE_BIN`、`CAR_HOST`、`CAR_PORT`。
-
-演练模式：把 `CAR_PROJECTS_ROOT` 指向真实转写根并配假引擎时，给假引擎加 `CAR_FAKE_NOWRITE=1`（`scripts/fake-claude.mjs` 只输出成功结果、绝不向转写落帧，叶核验会诚实失败）。注意 `@fastify/static` 在启动时挂静态路由——**重建 dist 后需重启进程**。
-
-## 核心机制（与设计书对位）
+## ⚙️ 核心机制
 
 | 机制 | 实现位置 |
 | --- | --- |
-| 限额事件源 = 转写 `api_error` 帧（§6.1） | `modules/limit/detector.ts` + `modules/watcher/` |
-| 头部读窗 = 行数优先 + 字节兜底（大帧顶前事故两例） | `adapters/vscode-claude/transcriptLocator.ts` |
+| 限额事件源 = 转写 `api_error` 帧 | `modules/limit/detector.ts` + `modules/watcher/` |
+| 头部读窗 = 行数优先 + 字节兜底 | `adapters/vscode-claude/transcriptLocator.ts` |
 | 登记下拉 = 只读扫描转写根最近会话（`entrypoint=claude-vscode` 才收，不入库） | `modules/discover/discoveryService.ts` |
-| 重置时刻按配置时区解析（§6.3） | `modules/limit/timezone.ts` |
-| 冷会话守卫 `pgrep --resume=<sid>`（§5.1-11） | `modules/resume/coldGuard.ts` |
-| headless 续跑引擎（§2.3） | `modules/resume/runner.ts` |
-| 叶血统核验，禁文件级启发（§5.1-13） | `modules/resume/transcript.ts` |
-| 串行调度 + 指数退避（§6.3/§7） | `modules/scheduler/` |
-| 崩溃对账单位=叶，结果不明即 paused（§7.3） | `scheduler.reconcileOnBoot()` |
-| 同会话单活动任务（§7.3） | 部分唯一索引 `idx_tasks_active` |
-| 倒计时只在展示层动态计算（§10.1） | `apps/web/src/stores/ticker.ts` |
-| 任务详情回答六问（§10.3） | `apps/web/src/pages/TaskDetailPage.vue` |
+| 重置时刻按配置时区解析 | `modules/limit/timezone.ts` |
+| 冷会话守卫 `pgrep --resume=<sid>` | `modules/resume/coldGuard.ts` |
+| headless 续跑引擎 | `modules/resume/runner.ts` |
+| 叶血统核验，禁文件级启发 | `modules/resume/transcript.ts` |
+| 串行调度 + 指数退避 | `modules/scheduler/` |
+| 崩溃对账单位=叶，结果不明即 paused | `scheduler.reconcileOnBoot()` |
+| 同会话单活动任务 | 部分唯一索引 `idx_tasks_active` |
+| 倒计时只在展示层动态计算 | `apps/web/src/stores/ticker.ts` |
+| 任务详情回答六问 | `apps/web/src/pages/TaskDetailPage.vue` |
 
-## 安全红线（§11）
+## 🔒 安全与隐私
+
+安全设计：
 
 - 只监听 `127.0.0.1`；令牌鉴权；写操作 CSRF 防护（自定义头 + Origin/Host 校验）
 - 恢复引擎显式 `--permission-mode default`，**绝不使用** `--dangerously-skip-permissions`
 - 未登记会话的事件一概不落库；日志脱敏截断
 - 会话由工具续跑后即「已接管」，展示以工具自有面为准，侧边栏视为只读发源地
 
-## 目录
+隐私边界：
+
+- 全部数据（任务、日志、访问令牌）只存本机数据目录，**无任何遥测与上报**
+- 对外仅访问本机转写目录与你所配置的模型 CLI，不经过任何第三方服务器
+- 令牌文件 `token.txt` 权限 0600，仅本机当前用户可读
+
+## 📁 目录
 
 ```
 apps/server/          本地服务（Fastify + SQLite + 任务引擎）
 apps/web/             Vue3 管理面（Vite 构建，服务端托管 dist）
+apps/desktop/         Mac 托盘壳（Tauri v2 + bun sidecar）
 packages/contracts/   前后端共享类型与错误码
 migrations/           SQLite 迁移
 tests/                单元 + 集成测试（fake-claude 假引擎）
 scripts/              fake-claude.mjs（测试假引擎）、smoke.mjs（冒烟）、e2e-web.mjs（Web E2E）
 ```
+
+## 📄 声明
+
+- 本项目为独立的本地效率工具，与 Anthropic（Claude）及 GLM 服务提供方**无隶属关系**，亦非其官方客户端
+- 限额策略与重置规则以服务商实际策略为准，本项目仅按转写中的事件做本地自动化
+- 软件按「现状」提供，使用前请自行评估；请遵守你所使用模型服务的用户条款
+
+---
+
+<div align="center">
+
+**NoIdle · Keep Building 持续构建**
+
+<sub>© 2026 NoIdle</sub>
+
+</div>

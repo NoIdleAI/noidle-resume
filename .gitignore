@@ -12,3 +12,11 @@ apps/desktop/icon-source.png
 # ZCode 工作区元数据与 bun 编译缓存
 .zcode/
 *.bun-build
+
+# 运行时本地数据（开源防线）
+token.txt
+.env
+.env.*
+*.sqlite
+*.sqlite3
+config.local.json
