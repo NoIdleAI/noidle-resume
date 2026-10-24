@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="140 124 232 264" width="232" height="264" role="img" aria-label="NoIdle AI logo, pulse">
+  <!-- 方案C · 圆头 N + 脉冲点:对角线留断口嵌圆点,呼应应用里的状态灯;建议 ≥32px 使用 -->
+  <g fill="none" stroke="#000" stroke-width="52" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M166 362 L166 150 L224.9 219.4"/>
+    <path d="M287.1 292.6 L346 362 L346 150"/>
+  </g>
+  <circle cx="256" cy="256" r="14" fill="#000"/>
+</svg>

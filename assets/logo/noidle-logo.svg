@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="NoIdle AI logo">
+  <!-- 主标志:B 版圆头 N + 苹果式白底圆角矩形。
+       轮廓为连续曲率圆角(squircle):直线 → 二次贝塞尔 → 圆弧(半径114) → 二次贝塞尔 → 直线,
+       圆角等效半径 114/512 ≈ 22.4%,对齐 macOS 图标规范。 -->
+  <path fill="#fff" d="M148 0 H364 Q410.99 0 423.64 2.92 A114 114 0 0 1 509.08 88.36 Q512 101.01 512 148 V364 Q512 410.99 509.08 423.64 A114 114 0 0 1 423.64 509.08 Q410.99 512 364 512 H148 Q101.01 512 88.36 509.08 A114 114 0 0 1 2.92 423.64 Q0 410.99 0 364 V148 Q0 101.01 2.92 88.36 A114 114 0 0 1 88.36 2.92 Q101.01 0 148 0 Z"/>
+  <g transform="translate(256 256) scale(1.12) translate(-256 -256)">
+    <path fill="none" stroke="#000" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" d="M166 362 L166 150 L346 362 L346 150"/>
+  </g>
+</svg>

@@ -198,6 +198,12 @@ fn open_dashboard(app: &AppHandle, port: u16) {
                 .title("NoIdle Resume")
                 .inner_size(1280.0, 860.0)
                 .min_inner_size(960.0, 620.0)
+                .theme(Some(tauri::Theme::Dark))
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true)
+                // 红绿灯下移+左移:tao 的 y 是灯下方的余量,灯心 ≈ y-4;取 24 与 .side-top
+                // 三键(高 52px 条内垂直居中,中心 y=26)横向对齐
+                .traffic_light_position(tauri::LogicalPosition::new(20.0, 24.0))
                 .build()
         {
             eprintln!("打开管理窗口失败: {e}");
@@ -220,9 +226,9 @@ pub fn run() {
         ))
         .manage(PortState(port))
         .setup(move |app| {
-            // 菜单栏应用：不占 Dock
+            // 常规应用:Dock 显示 N 图标、⌘Tab 可切;关窗=隐藏,点 Dock 图标唤回(见 Reopen)
             #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            app.set_activation_policy(tauri::ActivationPolicy::Regular);
 
             let resource_dir = app.path().resource_dir()?;
             let paths = AppPaths {
@@ -299,9 +305,15 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("Tauri 初始化失败")
-        .run(|_app, event| {
-            if let tauri::RunEvent::Exit = event {
-                reap_child();
+        .run(move |app, event| {
+            match event {
+                tauri::RunEvent::Exit => {
+                    reap_child();
+                }
+                // 常规应用:关窗=隐藏,点 Dock 图标把管理页调回前台
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen { .. } => open_dashboard(app, port),
+                _ => {}
             }
         });
 }

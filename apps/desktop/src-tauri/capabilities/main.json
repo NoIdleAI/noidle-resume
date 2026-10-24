@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "值守台窗口:页面来自本机 sidecar 的 http 回环地址,仅对回环上下文授权;start-dragging 供拖拽区使用",
+  "windows": ["dashboard"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*", "http://localhost:*"]
+  },
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
+}

@@ -4,7 +4,11 @@ import zlib from 'node:zlib';
 import fs from 'node:fs';
 
 const S = 1024;
-const R = 280; // 圆角半径（Logo 比例约 27%）
+// Apple macOS 图标模板(Big Sur+):图稿 824² 居中,四周各留 100px 透明边,
+// 圆角半径 ≈185(占图稿 22.5%)。铺满画布的图标在 Dock 里会比别家大一圈。
+const A = 824;
+const M = (S - A) / 2;
+const R = 186;
 // 品牌色：橙色圆角方底 + 黑色 N（用户提供的设计）
 const BG = [238, 138, 92];
 const FG = [17, 17, 17];
@@ -13,18 +17,21 @@ const FG = [17, 17, 17];
 const px = new Uint8Array(S * S * 4);
 
 function insideRounded(x, y) {
-  // 圆角矩形内部判定（整图即圆角矩形，边缘 8px 留白由 macOS 自动加，这里铺满）
-  const rx = x < R ? R - x : x >= S - R ? x - (S - R - 1) : 0;
-  const ry = y < R ? R - y : y >= S - R ? y - (S - R - 1) : 0;
+  // 圆角矩形内部判定(坐标换算到 824² 图稿内)
+  const lx = x - M;
+  const ly = y - M;
+  if (lx < 0 || ly < 0 || lx >= A || ly >= A) return false;
+  const rx = lx < R ? R - lx : lx >= A - R ? lx - (A - R - 1) : 0;
+  const ry = ly < R ? R - ly : ly >= A - R ? ly - (A - R - 1) : 0;
   if (rx <= 0 || ry <= 0) return true;
   return rx * rx + ry * ry <= R * R;
 }
 
 // N 字形：左竖 + 右竖 + 对角线（按垂直距离取等粗笔画），坐标 0..1 相对字框。
 // 对角线与竖笔等粗（用点到直线距离，而非竖直带），字形更匀称。
-function insideN(x, y) {
-  const u = x / S;
-  const v = y / S;
+function insideN(lx, ly) {
+  const u = lx / A;
+  const v = ly / A;
   const x0 = 0.30, x1 = 0.70, y0 = 0.29, y1 = 0.71; // 字框
   if (u < x0 || u > x1 || v < y0 || v > y1) return false;
   const w = 0.068; // 竖笔宽
@@ -47,7 +54,7 @@ for (let y = 0; y < S; y++) {
     let hit = 0;
     for (let dy = -1; dy <= 1; dy++)
       for (let dx = -1; dx <= 1; dx++)
-        if (insideN(x + dx / 2, y + dy / 2)) hit++;
+        if (insideN(x + dx / 2 - M, y + dy / 2 - M)) hit++;
     const a = hit / 9;
     px[i] = Math.round(BG[0] * (1 - a) + FG[0] * a);
     px[i + 1] = Math.round(BG[1] * (1 - a) + FG[1] * a);
