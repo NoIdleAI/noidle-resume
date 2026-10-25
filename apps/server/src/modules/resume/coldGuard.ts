@@ -33,12 +33,15 @@ export function unixResumeProbe(sessionId: string): ResumeProbe {
 /**
  * Windows 探针：pgrep 不存在，经 PowerShell CIM 枚举进程命令行匹配。
  * 只放行 [0-9a-zA-Z_-] 进过滤串（sessionId 本是 UUID，防御外部输入），杜绝 WQL 注入。
+ * 必须排除探针自身（$PID）：过滤串里就含 --resume=<sid>，CIM 会枚举到
+ * powershell.exe 自己 → 永远自匹配 → 永远误判热持有（CI 实测踩过；
+ * unix pgrep 天生不匹配自身，此处必须显式对齐该语义）。
  * 探测参数构造为纯函数，单测覆盖（tests/unit/platform.test.ts）。
  */
 export function windowsResumeProbeArgs(sessionId: string): string[] {
   const safe = sessionId.replace(/[^0-9a-zA-Z_-]/g, '');
   const filter = `CommandLine LIKE '%--resume=${safe}%' OR CommandLine LIKE '%--resume ${safe}%'`;
-  const script = `(Get-CimInstance Win32_Process -Filter "${filter}").ProcessId`;
+  const script = `(Get-CimInstance Win32_Process -Filter "${filter}" | Where-Object ProcessId -ne $PID).ProcessId`;
   return ['-NoProfile', '-NonInteractive', '-Command', script];
 }
 

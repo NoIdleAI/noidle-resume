@@ -116,3 +116,8 @@ test('探针超时：win32 放宽到 30s（CIM 冷启动），unix 5s', () => {
   assert.equal(probeTimeoutMs('darwin'), 5_000);
   assert.equal(probeTimeoutMs('linux'), 5_000);
 });
+
+test('WQL 探针：必须排除自身进程（$PID），否则 CIM 自匹配永远误判热持有', () => {
+  const script = windowsResumeProbeArgs('a1b2c3d4').at(-1) as string;
+  assert.ok(script.includes('Where-Object ProcessId -ne $PID'), '缺少 $PID 自身排除');
+});
