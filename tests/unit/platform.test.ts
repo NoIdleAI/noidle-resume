@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { defaultDataDir } from '../../apps/server/src/config.ts';
 import { samePath } from '../../apps/server/src/adapters/vscode-claude/transcriptLocator.ts';
-import { windowsResumeProbeArgs } from '../../apps/server/src/modules/resume/coldGuard.ts';
+import { probeTimeoutMs, windowsResumeProbeArgs } from '../../apps/server/src/modules/resume/coldGuard.ts';
 import {
   argvQuote,
   windowsSpawnPlan,
@@ -109,4 +109,10 @@ test('spawn 计划：exe/裸名直拉；.cmd 经 cmd /d /s /c 包装且 verbatim
   assert.ok(shim.args[3].startsWith('"C:\\npm\\claude.cmd'));
   assert.ok(shim.args[3].endsWith('"'));
   assert.ok(shim.args[3].includes('"say \\"hi\\""'));
+});
+
+test('探针超时：win32 放宽到 30s（CIM 冷启动），unix 5s', () => {
+  assert.equal(probeTimeoutMs('win32'), 30_000);
+  assert.equal(probeTimeoutMs('darwin'), 5_000);
+  assert.equal(probeTimeoutMs('linux'), 5_000);
 });

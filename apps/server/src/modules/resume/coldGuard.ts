@@ -53,6 +53,15 @@ export function windowsResumeProbe(sessionId: string): ResumeProbe {
 }
 
 /**
+ * 探针超时：Windows CIM 首查要初始化 WMI，繁忙机器上可达 10s+（GitHub runner
+ * 实测踩过：5s 超时 → 误判热持有 → 全部续跑测试退避），放宽到 30s；
+ * unix pgrep 本地毫秒级，5s 足够。
+ */
+export function probeTimeoutMs(platform: NodeJS.Platform = process.platform): number {
+  return platform === 'win32' ? 30_000 : 5_000;
+}
+
+/**
  * 冷会话守卫（设计书 §5.1 规则 11 / §13 assertCold）。
  *
  * 命中 `--resume=<sessionId>` 签名进程即视为热持有，拒绝恢复，避免 silent 分叉。
@@ -64,7 +73,7 @@ export async function assertCold(sessionId: string): Promise<ColdCheckResult> {
     process.platform === 'win32' ? windowsResumeProbe(sessionId) : unixResumeProbe(sessionId);
   try {
     const { stdout } = await execFileAsync(probe.bin, probe.args, {
-      timeout: 5000,
+      timeout: probeTimeoutMs(),
       windowsHide: true,
     });
     const pids = probe.hasMatch(stdout);
