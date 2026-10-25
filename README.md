@@ -162,6 +162,9 @@ npm run build:desktop    # 前端 dist → sidecar exe → NSIS 安装器
 - claude CLI：原生安装（`claude.exe`）直接拉起；npm shim（`claude.cmd`）自动经 `cmd /d /s /c` 包装，也可用 `CAR_CLAUDE_BIN` 显式指定
 - 自启动写注册表 Run 键；NSIS 按 currentUser 安装，不要求管理员
 - 安装器未签名，首次运行 SmartScreen 会提示，选「仍要运行」即可
+- **卸载自动清理**：NSIS 卸载器结束时询问是否连数据目录一起删除（默认保留，升级/重装不丢值守记录）；钩子见 `apps/desktop/src-tauri/nsis-installer-hooks.nsh`，与数据目录约定三处同源（shell/服务端/钩子）
+
+macOS 侧拖拽删除没有「卸载事件」，提供双击即用的完全卸载脚本：`scripts/uninstall-macos.command`（退出 App → 删程序 → 询问后清数据）。
 
 **质量标准如何落实：**
 
