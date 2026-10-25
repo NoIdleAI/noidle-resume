@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### 计划中
+
+- Windows 真机验证（安装 → 托盘 → 自启 → 登记 → 限额 → 自动续跑全链）
+- 阶段四：安全加固、兼容性扩展与发布
+- 已知待修：测试夹具 `limitFrame` 的 `error` 为字符串形状，`frameText` 提取不到（生产路径走 assistant+isApiErrorMessage 分支不受影响，但 `enforceLimitCheck` 路径零测试覆盖、smoke 因此失败）
+
+## [0.1.1] - 2026-10-25
+
 ### Added
 
 - Windows 客户端（Tauri v2 壳 + 同一 bun 单文件 sidecar）：数据目录 `%APPDATA%\noidle-resume`、自启动走注册表、NSIS currentUser 安装（简中/英文）
@@ -27,11 +35,6 @@
 - 桌面壳数据目录按平台分派（与 `config.ts defaultDataDir` 注释互链，两处同源）；Unix 信号收割限定 macOS/Linux（`signal-hook` 改为 unix-only 依赖）
 - 迁移目录定位改用 `fileURLToPath`（修复 Windows 下 `URL.pathname` 的 `/C:/...` 形态）；legacy 数据目录搬迁限定 macOS
 
-### 计划中
-
-- Windows 真机验证（安装 → 托盘 → 自启 → 登记 → 限额 → 自动续跑全链）
-- 阶段四：安全加固、兼容性扩展与发布
-
 ## [0.1.0] - 2026-10-24
 
 首个公开发行版。
@@ -48,5 +51,6 @@
 - 安全基线：仅监听 `127.0.0.1`、令牌门 + HttpOnly Cookie、CSRF 防护、日志脱敏
 - 测试基建：61 项单元 + 集成测试、冒烟脚本、真浏览器 E2E 全链 13 步（假引擎，零真额度）
 
-[Unreleased]: https://github.com/NoIdleAI/noidle-resume/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/NoIdleAI/noidle-resume/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/NoIdleAI/noidle-resume/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/NoIdleAI/noidle-resume/releases/tag/v0.1.0

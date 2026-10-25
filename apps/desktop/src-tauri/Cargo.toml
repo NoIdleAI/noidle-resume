@@ -1,6 +1,6 @@
 [package]
 name = "noidle-resume-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "NoIdle Resume 托盘壳：拉起本地 sidecar 服务并常驻菜单栏"
 edition = "2021"
 

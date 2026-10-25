@@ -1,7 +1,7 @@
 {
   "name": "noidle-resume",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "GLM Coding Plan 限额到点后，自动续跑 VS Code 侧边栏 Claude Code 会话的本地工具",
   "type": "module",
   "workspaces": [

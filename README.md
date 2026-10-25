@@ -6,7 +6,7 @@
 
 <em>本地值守 · 转写事实源 · 自动重发 · 零真额度测试</em>
 
-![version](https://img.shields.io/badge/version-0.1.0-0969DA?style=flat-square)
+![version](https://img.shields.io/badge/version-0.1.1-0969DA?style=flat-square)
 ![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522.13-339933?style=flat-square&logo=nodedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)
