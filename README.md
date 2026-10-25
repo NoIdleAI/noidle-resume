@@ -15,7 +15,7 @@
 ![License](https://img.shields.io/badge/License-Apache_2.0-0969DA?style=flat-square)
 ![GitHub](https://img.shields.io/badge/GitHub-NoIdleAI-181717?style=flat-square&logo=github)
 
-[✨ 特性亮点](#-特性亮点) · [🗺️ 路线图](#️-路线图) · [🚀 快速开始](#-快速开始) · [⚙️ 核心机制](#️-核心机制) · [🔒 安全与隐私](#-安全与隐私)
+[✨ 特性亮点](#-特性亮点) · [📸 界面预览](#-界面预览) · [🗺️ 路线图](#️-路线图) · [🚀 快速开始](#-快速开始) · [⚙️ 核心机制](#️-核心机制) · [🔒 安全与隐私](#-安全与隐私)
 
 </div>
 
@@ -29,6 +29,71 @@
 - 🔒 **本地与安全** — 只监听 `127.0.0.1`，令牌门 + HttpOnly Cookie；恢复引擎显式 `--permission-mode default`，绝不开危险模式
 - 🧪 **零真额度验证** — 61/61 单元 + 集成测试、真浏览器 E2E 全链 13 步（假引擎演练），测试不烧一分钟额度
 - 📦 **Mac 托盘壳** — Tauri v2 菜单栏常驻：单文件 sidecar、拉起/收割服务、开机自启、退出无孤儿进程
+
+## 📸 界面预览
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**总览看板**（[overview.png](assets/screenshots/overview.png)）
+
+<img src="assets/screenshots/overview.png" alt="总览看板"/>
+
+撞限任务实时状态：距重置倒计时、5 小时窗口进度、限额帧原文与置信度，自动化列表与历史记录同屏。
+
+</td>
+<td width="50%" valign="top">
+
+**会话登记**（[sessions.png](assets/screenshots/sessions.png)）
+
+<img src="assets/screenshots/sessions.png" alt="会话登记页"/>
+
+登记下拉来自本机转写扫描（近 24 小时 VS Code 会话），选中即加入自动化列表，免手抠 UUID。
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**任务详情 · 实况**（[task-panorama.png](assets/screenshots/task-panorama.png)）
+
+<img src="assets/screenshots/task-panorama.png" alt="任务详情实况"/>
+
+撞限事件全景卡：倒计时、窗口进度与五步事件链（检测 → 解析重置 → 到期核验 → 续跑原会话 → 叶落盘核验）。
+
+</td>
+<td width="50%" valign="top">
+
+**任务详情 · 六问**（[task-detail.png](assets/screenshots/task-detail.png)）
+
+<img src="assets/screenshots/task-detail.png" alt="任务详情六问"/>
+
+为什么产生、状态怎么解读、恢复时间怎么算——技术细节给出任务 ID、起点叶 / 核验叶、排期与最近尝试。
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**补录限额**（[backfill.png](assets/screenshots/backfill.png)）
+
+<img src="assets/screenshots/backfill.png" alt="补录限额弹窗"/>
+
+监听漏报时手动兜底：粘贴限额提示原文，自动解析重置时刻（按配置时区墙上钟），补录即建恢复任务。
+
+</td>
+<td width="50%" valign="top">
+
+**设置**（[settings.png](assets/screenshots/settings.png)）
+
+<img src="assets/screenshots/settings.png" alt="设置页"/>
+
+恢复策略（自动重发开关 / 尝试上限 / 退避参数 / 续跑超时 / 提示词模板）、时区与服务健康状态、脱敏日志。
+
+</td>
+</tr>
+</table>
 
 ## 🗺️ 路线图
 
