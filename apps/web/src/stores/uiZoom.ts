@@ -1,15 +1,15 @@
 import { ref } from 'vue';
 
 /**
- * 主任务卡等比例缩放（2026-10-25 用户定案：卡片排版不改，仅缩小卡片显示）。
- * 系数经 CSS 变量 --card-zoom 挂在 .hero 上（zoom 会保持卡片满宽、内容等比缩小），
- * 页面其余部分不缩放。默认 80%，localStorage 记忆。
+ * 主任务卡等比例缩放：卡片排版不改，整卡按系数缩小。
+ * 系数经 CSS 变量 --card-zoom 挂在 .hero 上（zoom 保持满宽，内容/高度按系数缩），
+ * 页面其余部分不缩放。默认 100%（窗口默认尺寸已改小），localStorage 记忆。
  */
-const KEY = 'noidle.ui.zoom';
+const KEY = 'noidle.ui.zoom.v2';
 const MIN = 0.6;
 const MAX = 1.2;
 const STEP = 0.05;
-const DEFAULT = 0.8;
+const DEFAULT = 1;
 
 function clamp(z: number): number {
   return Math.min(MAX, Math.max(MIN, z));

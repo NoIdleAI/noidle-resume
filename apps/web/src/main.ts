@@ -15,6 +15,7 @@ createApp(App).use(router).mount('#app');
 const warmRoutes = (): void => {
   void import('./pages/SessionsPage.vue');
   void import('./pages/SettingsPage.vue');
+  void import('./pages/AboutPage.vue');
   void import('./pages/TaskDetailPage.vue');
 };
 if ('requestIdleCallback' in window) {

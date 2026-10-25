@@ -228,7 +228,8 @@ fn open_dashboard(app: &AppHandle, port: u16) {
         let url: tauri::Url = url_s.parse().unwrap();
         let builder = WebviewWindowBuilder::new(&app, "dashboard", WebviewUrl::External(url))
             .title("NoIdle Resume")
-            .inner_size(1280.0, 860.0)
+            // 默认窗口 ~1060×740（2026-10-25 用户定案：原 1280×860 打开过大）
+            .inner_size(1060.0, 740.0)
             .min_inner_size(960.0, 620.0)
             .theme(Some(tauri::Theme::Dark));
         // 红绿灯叠入内容区是 macOS 专属 API；Windows 用系统标准标题栏

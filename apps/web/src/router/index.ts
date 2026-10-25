@@ -7,6 +7,7 @@ export const router = createRouter({
     { path: '/sessions', name: 'sessions', component: () => import('../pages/SessionsPage.vue') },
     { path: '/tasks/:id', name: 'task', component: () => import('../pages/TaskDetailPage.vue') },
     { path: '/settings', name: 'settings', component: () => import('../pages/SettingsPage.vue') },
+    { path: '/about', name: 'about', component: () => import('../pages/AboutPage.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 });

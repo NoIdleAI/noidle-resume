@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { store } from './stores/data';
 import { uiZoom, zoomBy, applyZoom } from './stores/uiZoom';
-import ServiceBadge from './components/ServiceBadge.vue';
 import TokenGate from './pages/TokenGate.vue';
 
 const route = useRoute();
@@ -12,9 +11,10 @@ const onDashboard = computed(() => route.name === 'dashboard');
 // 会话详情(/tasks/:id)归属会话分组,侧栏保持高亮
 const onSessions = computed(() => route.name === 'sessions' || route.name === 'task');
 const onSettings = computed(() => route.name === 'settings');
+const zoomPct = computed(() => Math.round(uiZoom.value * 100));
+const onAbout = computed(() => route.name === 'about');
 
 // 顶栏三键:收起/展开侧栏(记忆偏好)、后退、前进(按浏览历史位置点亮)
-const zoomPct = computed(() => Math.round(uiZoom.value * 100));
 const sideHidden = ref(localStorage.getItem('car_side') === '1');
 function toggleSide(): void {
   sideHidden.value = !sideHidden.value;
@@ -95,7 +95,6 @@ onMounted(() => {
       </div>
       <div class="brand"><span class="mark">N</span>NoIdle Resume</div>
 
-      <div class="side-label">值守</div>
       <router-link to="/" class="side-item" :class="{ on: onDashboard }">
         <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <rect x="1.75" y="1.75" width="5.2" height="5.2" rx="1.4" />
@@ -112,7 +111,6 @@ onMounted(() => {
         会话
       </router-link>
 
-      <div class="side-label">系统</div>
       <router-link to="/settings" class="side-item" :class="{ on: onSettings }">
         <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path d="M2.2 4.4h5.2M12.6 4.4h1.2M2.2 11.6h3.4M9.9 11.6h3.9" stroke-linecap="round" />
@@ -121,17 +119,23 @@ onMounted(() => {
         </svg>
         设置
       </router-link>
+      <router-link to="/about" class="side-item" :class="{ on: onAbout }">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.3" />
+          <path d="M8 7.4v3.4" stroke-linecap="round" />
+          <circle cx="8" cy="5" r="0.7" fill="currentColor" stroke="none" />
+        </svg>
+        关于
+      </router-link>
 
       <div class="side-push"></div>
-      <ServiceBadge />
-      <!-- 任务卡等比缩放：卡片排版不动，仅卡片等比缩小；记忆在 localStorage -->
+      <!-- 任务卡等比缩放：排版不动，卡片整体缩小；记忆在 localStorage -->
       <div class="zoomctl">
-        <button class="zc" title="缩小" @click="zoomBy(-0.05)">−</button>
-        <span class="zp mono" :title="'任务卡缩放 ' + zoomPct + '%（默认 80%）'">{{ zoomPct }}%</span>
-        <button class="zc" title="放大" @click="zoomBy(0.05)">＋</button>
+        <button class="zc" title="缩小任务卡" @click="zoomBy(-0.05)">−</button>
+        <span class="zp mono" :title="'任务卡缩放 ' + zoomPct + '%'">{{ zoomPct }}%</span>
+        <button class="zc" title="放大任务卡" @click="zoomBy(0.05)">＋</button>
         <button v-if="uiZoom !== 1" class="zc rst" title="恢复 100%" @click="applyZoom(1)">1:1</button>
       </div>
-      <div class="side-note">本地优先 · 数据不出本机 · <span class="mono">v0.1</span></div>
     </aside>
 
     <main class="main">
