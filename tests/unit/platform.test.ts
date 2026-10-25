@@ -16,10 +16,10 @@ test('数据目录：win32 用 %APPDATA%，无 APPDATA 时落到用户目录', (
   const saved = process.env.APPDATA;
   try {
     process.env.APPDATA = 'C:\\Users\\u\\AppData\\Roaming';
-    // 注意：本测试在 mac/linux runner 上也会跑，path.join 取的是宿主分隔符
+    // 断言全部经 path.join 组装：同一份测试在 mac 与 Windows CI 上都能过
     assert.equal(
       defaultDataDir('win32'),
-      'C:\\Users\\u\\AppData\\Roaming' + path.sep + 'noidle-resume',
+      path.join('C:\\Users\\u\\AppData\\Roaming', 'noidle-resume'),
     );
     delete process.env.APPDATA;
     assert.equal(
@@ -34,17 +34,18 @@ test('数据目录：win32 用 %APPDATA%，无 APPDATA 时落到用户目录', (
 
 test('数据目录：darwin 沿用 Library/Application Support', () => {
   const dir = defaultDataDir('darwin');
-  assert.ok(dir.includes('Library/Application Support/noidle-resume'));
+  // 断言用 path.join 组装：同一份测试在 Windows CI 上也要能过
+  assert.ok(dir.endsWith(path.join('Library', 'Application Support', 'noidle-resume')));
 });
 
 test('数据目录：linux 走 XDG_DATA_HOME，缺省 ~/.local/share', () => {
   const saved = process.env.XDG_DATA_HOME;
   try {
     process.env.XDG_DATA_HOME = '/data/home';
-    assert.equal(defaultDataDir('linux'), '/data/home/noidle-resume');
+    assert.equal(defaultDataDir('linux'), path.join('/data/home', 'noidle-resume'));
     delete process.env.XDG_DATA_HOME;
     const dir = defaultDataDir('linux');
-    assert.ok(dir.endsWith('/.local/share/noidle-resume'));
+    assert.ok(dir.endsWith(path.join('.local', 'share', 'noidle-resume')));
   } finally {
     if (saved === undefined) delete process.env.XDG_DATA_HOME;
     else process.env.XDG_DATA_HOME = saved;

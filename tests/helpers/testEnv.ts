@@ -65,13 +65,22 @@ export function makeTestEnv(): TestEnv {
   };
 }
 
-/** 生成壳脚本：exec node fake-claude.mjs "$@"（execFile 需要可直接执行文件）。 */
+/**
+ * 生成假引擎壳：exec node fake-claude.mjs "$@"（runner 需要可直接执行的文件）。
+ * unix 用 sh 脚本；Windows 用 .cmd——正好让 Windows CI 真实覆盖
+ * runner 的 cmd /d /s /c 包装路径（windowsSpawnPlan）。
+ */
 function makeFakeBin(root: string): string {
   const fakeClaudeTs = fileURLToPath(
     new URL('../../scripts/fake-claude.mjs', import.meta.url),
   );
   const binDir = path.join(root, 'bin');
   fs.mkdirSync(binDir, { recursive: true });
+  if (process.platform === 'win32') {
+    const bin = path.join(binDir, 'fake-claude.cmd');
+    fs.writeFileSync(bin, `@echo off\r\nnode "${fakeClaudeTs}" %*\r\n`);
+    return bin;
+  }
   const bin = path.join(binDir, 'fake-claude');
   fs.writeFileSync(
     bin,
