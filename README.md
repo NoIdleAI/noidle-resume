@@ -92,6 +92,8 @@
 恢复策略（自动重发开关 / 尝试上限 / 退避参数 / 续跑超时 / 提示词模板）、时区与服务健康状态、脱敏日志。
 
 </td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 **关于**（[about.png](assets/screenshots/about.png)）
