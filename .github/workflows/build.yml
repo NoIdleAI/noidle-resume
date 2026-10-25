@@ -1,0 +1,61 @@
+# 双平台构建：macOS 产出 .dmg，Windows 产出 NSIS 安装器 exe。
+# 触发：打 tag v* 或手动。两平台都跑完整测试——Windows runner 上跑测试
+# 让 win32 分支（冷守卫探针、spawn 计划、路径归一）有真实回归网。
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            name: macos-dmg
+          - os: windows-latest
+            artifact: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            name: windows-nsis-exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test (unit + integration, zero real quota)
+        run: npm test
+
+      - name: Build web dist
+        run: npm run build
+
+      - name: Build sidecar (single-file server binary)
+        run: node scripts/build-sidecar.mjs
+
+      - name: Build desktop shell (tauri)
+        working-directory: apps/desktop
+        run: npx tauri build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error

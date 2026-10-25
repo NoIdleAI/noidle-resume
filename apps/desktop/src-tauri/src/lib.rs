@@ -43,13 +43,41 @@ fn pick_port() -> Option<u16> {
     None
 }
 
-/// 与服务端 config.ts 同源的数据目录约定：~/Library/Application Support/noidle-resume
+/// 与服务端 config.ts defaultDataDir 同源的数据目录约定（两处改动必须同步）：
+/// macOS ~/Library/Application Support/noidle-resume；
+/// Windows %APPDATA%\noidle-resume；Linux $XDG_DATA_HOME/noidle-resume。
+#[cfg(target_os = "windows")]
+fn default_data_dir() -> PathBuf {
+    let base = std::env::var("APPDATA").unwrap_or_else(|_| {
+        std::env::var("USERPROFILE")
+            .map(|home| {
+                PathBuf::from(home)
+                    .join("AppData")
+                    .join("Roaming")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .unwrap_or_else(|_| "C:\\ProgramData".into())
+    });
+    PathBuf::from(base).join("noidle-resume")
+}
+
+#[cfg(target_os = "macos")]
 fn default_data_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
     PathBuf::from(home)
         .join("Library")
         .join("Application Support")
         .join("noidle-resume")
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn default_data_dir() -> PathBuf {
+    let base = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+        format!("{home}/.local/share")
+    });
+    PathBuf::from(base).join("noidle-resume")
 }
 
 /// 轮询 /api/v1/health 直到服务就绪（最多 20s；bun 冷启动 1-2s 内完成）。
@@ -94,6 +122,8 @@ fn reap_child() -> bool {
 }
 
 /// SIGTERM/SIGINT：收割 sidecar 后退出（launchd/killall 的退出路径）。
+/// Windows 无 Unix 信号：退出统一走托盘「退出」/关窗/壳进程消亡路径（下方 cfg 门）。
+#[cfg(unix)]
 fn install_signal_handler() {
     std::thread::spawn(|| {
         let signals = signal_hook::consts::TERM_SIGNALS;
@@ -110,6 +140,9 @@ fn install_signal_handler() {
         }
     });
 }
+
+#[cfg(not(unix))]
+fn install_signal_handler() {}
 
 fn spawn_server(app: &AppHandle, port: u16, paths: &AppPaths) -> Result<(), String> {
     let sidecar = app
@@ -193,19 +226,20 @@ fn open_dashboard(app: &AppHandle, port: u16) {
             url_s.push_str(&t);
         }
         let url: tauri::Url = url_s.parse().unwrap();
-        if let Err(e) =
-            WebviewWindowBuilder::new(&app, "dashboard", WebviewUrl::External(url))
-                .title("NoIdle Resume")
-                .inner_size(1280.0, 860.0)
-                .min_inner_size(960.0, 620.0)
-                .theme(Some(tauri::Theme::Dark))
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .hidden_title(true)
-                // 红绿灯下移+左移:tao 的 y 是灯下方的余量,灯心 ≈ y-4;取 24 与 .side-top
-                // 三键(高 52px 条内垂直居中,中心 y=26)横向对齐
-                .traffic_light_position(tauri::LogicalPosition::new(20.0, 24.0))
-                .build()
-        {
+        let builder = WebviewWindowBuilder::new(&app, "dashboard", WebviewUrl::External(url))
+            .title("NoIdle Resume")
+            .inner_size(1280.0, 860.0)
+            .min_inner_size(960.0, 620.0)
+            .theme(Some(tauri::Theme::Dark));
+        // 红绿灯叠入内容区是 macOS 专属 API；Windows 用系统标准标题栏
+        #[cfg(target_os = "macos")]
+        let builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true)
+            // 红绿灯下移+左移:tao 的 y 是灯下方的余量,灯心 ≈ y-4;取 24 与 .side-top
+            // 三键(高 52px 条内垂直居中,中心 y=26)横向对齐
+            .traffic_light_position(tauri::LogicalPosition::new(20.0, 24.0));
+        if let Err(e) = builder.build() {
             eprintln!("打开管理窗口失败: {e}");
         }
     });

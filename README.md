@@ -27,8 +27,8 @@
 - 📡 **转写为事实源** — 结算只认转写落盘并过血统核验；续跑进程正常退出、超时、被杀甚至不退场，都不影响判定
 - 🖥️ **值守台管理面** — Vue3 深色值守室：总览看板、会话页、任务详情六问、设置与日志四页；登记会话自动扫描转写根，免手抠 UUID
 - 🔒 **本地与安全** — 只监听 `127.0.0.1`，令牌门 + HttpOnly Cookie；恢复引擎显式 `--permission-mode default`，绝不开危险模式
-- 🧪 **零真额度验证** — 61/61 单元 + 集成测试、真浏览器 E2E 全链 13 步（假引擎演练），测试不烧一分钟额度
-- 📦 **Mac 托盘壳** — Tauri v2 菜单栏常驻：单文件 sidecar、拉起/收割服务、开机自启、退出无孤儿进程
+- 🧪 **零真额度验证** — 70/70 单元 + 集成测试、真浏览器 E2E 全链 13 步（假引擎演练），测试不烧一分钟额度
+- 📦 **Mac / Windows 托盘壳** — Tauri v2 常驻托盘：单文件 sidecar、拉起/收割服务、开机自启、退出无孤儿进程
 
 ## 📸 界面预览
 
@@ -99,8 +99,8 @@
 
 - ✅ **阶段一 · 技术验证** — 限额事件源、会话身份与转写定位、headless 续跑链路、冷热会话判据
 - ✅ **阶段二 · 后台与任务引擎** — SQLite 持久化（WAL + 迁移）、限额解析、任务状态机、串行调度、本地 API + WebSocket
-- 🚧 **阶段三 · 管理面与桌面壳（当前）** — Web 四页值守台、会话自动发现与登记、转写硬结算、Mac 托盘壳
-- ⬜ **阶段四 · 安全加固与发布** — 兼容性扩展、打包分发
+- ✅ **阶段三 · 管理面与桌面壳** — Web 四页值守台、会话自动发现与登记、转写硬结算、Mac/Windows 托盘壳
+- 🚧 **阶段四 · 安全加固与发布** — Windows 真机验证、打包分发、兼容性扩展
 
 ## 🚀 快速开始
 
@@ -131,9 +131,8 @@ npm run typecheck
 ```bash
 brew install rust bun                 # 构建工具链
 npm install
-npm run build                         # 前端 dist（sidecar 与 .app 共用）
-node scripts/gen-icon.mjs             # 生成图标源图（品牌橙底黑 N）
-cd apps/desktop && npx tauri build    # 产出 .app + .dmg
+npm run build:desktop                 # 前端 dist → sidecar → tauri build（产出 .app + .dmg）
+node scripts/gen-icon.mjs             # 更新图标时才需要（生成源图与各平台图标）
 ```
 
 产物：`apps/desktop/src-tauri/target/release/bundle/{macos,dmg}/`。
@@ -141,6 +140,41 @@ cd apps/desktop && npx tauri build    # 产出 .app + .dmg
 数据目录与服务端一致（`~/Library/Application Support/noidle-resume`）；sidecar 随壳退出被收割，无孤儿进程。
 
 注意：使用 .app 时请关闭开发态服务（`npm run dev`），避免两个调度器共用同一数据库。
+
+## 🪟 Windows 客户端（Tauri 托盘壳）
+
+与 Mac 完全同构：同一 Tauri v2 壳 + 同一份 bun 单文件 sidecar，平台差异收敛在五个策略点（数据目录、冷守卫探针、CLI 二进制定位、路径比对、壳侧窗口装饰/信号），业务主链路零平台分支。
+
+**构建（Windows 机器，需 Rust MSVC + bun + Node ≥ 22.13）：**
+
+```powershell
+npm install
+npm run build:desktop    # 前端 dist → sidecar exe → NSIS 安装器
+```
+
+产物：`apps/desktop/src-tauri/target/release/bundle/nsis/NoIdle Resume_<版本>_x64-setup.exe`。
+没有 Windows 机器时：sidecar exe 在 mac/linux 上 `npm run build:sidecar:win` 即可交叉编译产出；壳 exe 无法交叉编译（需 MSVC），由 [GitHub Actions](.github/workflows/build.yml)（打 tag `v*` 或手动触发）在 Windows runner 上产出，两平台都跑全量测试。
+
+**Windows 侧差异：**
+
+- 数据目录 `%APPDATA%\noidle-resume`（与 macOS 互不干扰；转写根同为 `~/.claude/projects`）
+- 冷会话守卫走 PowerShell CIM 枚举进程命令行（WQL 服务端过滤，参数白名单防注入）
+- claude CLI：原生安装（`claude.exe`）直接拉起；npm shim（`claude.cmd`）自动经 `cmd /d /s /c` 包装，也可用 `CAR_CLAUDE_BIN` 显式指定
+- 自启动写注册表 Run 键；NSIS 按 currentUser 安装，不要求管理员
+- 安装器未签名，首次运行 SmartScreen 会提示，选「仍要运行」即可
+
+**质量标准如何落实：**
+
+- 高性能 — 探针仅任务跑前调用一次（WQL 服务端过滤 + 5s 超时）；转写监听 fs.watch 失效自动回落 3s 轮询；sidecar `--minify` 单文件
+- 高安全 — 仅监听 `127.0.0.1` + 令牌门不变；WQL 参数白名单；MSVCRT 引号转义杜绝参数逃逸；currentUser 安装不写系统目录；令牌文件由 `%APPDATA%` 用户 ACL 保护
+- 高可靠 — 探测失败一律按热持有保守拒跑；进程硬结算（终止→强杀→兜底结算）在 Windows 语义等价；CI 双平台全量测试防回归
+
+**平台维护规则（新增平台差异时必读）：**
+
+1. 平台差异必须收口进既有策略点：`config.ts defaultDataDir`、`coldGuard`（pgrep/PowerShell）、`runner windowsSpawnPlan`、`transcriptLocator samePath`、`lib.rs default_data_dir`；业务模块禁止 `process.platform` 分支
+2. 数据目录约定 TS 与 Rust 两处同源（注释互链），改一处必改另一处
+3. 发版以双平台 CI 全绿为准；win32 专属纯函数测试（`tests/unit/platform.test.ts`）在 CI 的 Windows runner 上真实执行
+4. 平台行为差异集中登记在本节
 
 ## ⚙️ 核心机制
 
@@ -150,7 +184,7 @@ cd apps/desktop && npx tauri build    # 产出 .app + .dmg
 | 头部读窗 = 行数优先 + 字节兜底 | `adapters/vscode-claude/transcriptLocator.ts` |
 | 登记下拉 = 只读扫描转写根最近会话（`entrypoint=claude-vscode` 才收，不入库） | `modules/discover/discoveryService.ts` |
 | 重置时刻按配置时区解析 | `modules/limit/timezone.ts` |
-| 冷会话守卫 `pgrep --resume=<sid>` | `modules/resume/coldGuard.ts` |
+| 冷会话守卫 `pgrep` / PowerShell CIM `--resume=<sid>` | `modules/resume/coldGuard.ts` |
 | headless 续跑引擎 | `modules/resume/runner.ts` |
 | 叶血统核验，禁文件级启发 | `modules/resume/transcript.ts` |
 | 串行调度 + 指数退避 | `modules/scheduler/` |
@@ -179,11 +213,11 @@ cd apps/desktop && npx tauri build    # 产出 .app + .dmg
 ```
 apps/server/          本地服务（Fastify + SQLite + 任务引擎）
 apps/web/             Vue3 管理面（Vite 构建，服务端托管 dist）
-apps/desktop/         Mac 托盘壳（Tauri v2 + bun sidecar）
+apps/desktop/         Mac / Windows 托盘壳（Tauri v2 + bun sidecar，平台配置 tauri.{macos,windows}.conf.json）
 packages/contracts/   前后端共享类型与错误码
 migrations/           SQLite 迁移
 tests/                单元 + 集成测试（fake-claude 假引擎）
-scripts/              fake-claude.mjs（测试假引擎）、smoke.mjs（冒烟）、e2e-web.mjs（Web E2E）
+scripts/              fake-claude.mjs（测试假引擎）、smoke.mjs（冒烟）、e2e-web.mjs（Web E2E）、build-sidecar.mjs（sidecar 编译）
 ```
 
 ## 📄 声明

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface AppConfig {
   /** 数据目录：数据库、访问令牌（设计书 §14 用户应用数据目录）。 */
@@ -18,9 +19,7 @@ export interface AppConfig {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const dataDir =
-    env.CAR_DATA_DIR ??
-    path.join(os.homedir(), 'Library', 'Application Support', 'noidle-resume');
+  const dataDir = env.CAR_DATA_DIR ?? defaultDataDir(process.platform);
   return {
     dataDir,
     dbFile: path.join(dataDir, 'car.db'),
@@ -33,16 +32,38 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   };
 }
 
+/**
+ * 各平台用户应用数据目录（桌面壳 apps/desktop/src-tauri/src/lib.rs 的
+ * default_data_dir 与此同源，两处改动必须同步）：
+ * macOS ~/Library/Application Support/noidle-resume；
+ * Windows %APPDATA%\noidle-resume；
+ * Linux $XDG_DATA_HOME/noidle-resume（兜底 ~/.local/share）。
+ */
+export function defaultDataDir(platform: NodeJS.Platform = process.platform): string {
+  if (platform === 'win32') {
+    const appData = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(appData, 'noidle-resume');
+  }
+  if (platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'noidle-resume');
+  }
+  const dataHome = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local', 'share');
+  return path.join(dataHome, 'noidle-resume');
+}
+
 function defaultMigrationsDir(): string {
   // src/config.ts → apps/server/src → 仓库根/migrations
-  return new URL('../../../migrations/', import.meta.url).pathname;
+  // fileURLToPath 而非 URL.pathname：Windows 下 pathname 会给出 /C:/... 形态
+  return fileURLToPath(new URL('../../../migrations/', import.meta.url));
 }
 
 /**
  * 旧版数据目录 noidle-auto-resume → noidle-resume 一次性搬迁：
  * 新目录还没有库而旧目录有，则拷贝（库 + WAL + 令牌），原目录保留不动。
+ * 旧目录是 macOS 专属路径，仅 darwin 有此历史包袱。
  */
 export function importLegacyDataDir(dataDir: string, env: NodeJS.ProcessEnv = process.env): void {
+  if (process.platform !== 'darwin') return;
   if (env.CAR_DATA_DIR) return; // 显式指定数据目录的不掺和
   const legacyDir = path.join(
     os.homedir(),

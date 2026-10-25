@@ -17,6 +17,9 @@ tauri-plugin-shell = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-clipboard-manager = "2"
+
+[target.'cfg(unix)'.dependencies]
+# Unix 信号收割（SIGTERM/SIGINT）；Windows 退出走托盘/关窗路径，无需信号库
 signal-hook = "0.3"
 
 [profile.release]

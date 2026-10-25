@@ -15,6 +15,17 @@ export function encodeProjectPath(projectPath: string): string {
   return projectPath.replace(/[^A-Za-z0-9]/g, '-');
 }
 
+/**
+ * 平台策略点 4：工作区路径等值判定。
+ * Windows 文件系统大小写不敏感，realpath 的大小写随目录实际拼写漂移；
+ * Claude Code 帧内 cwd 的分隔符形态也可能与登记路径不一致，统一归一后比对。
+ */
+export function samePath(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+  if (platform !== 'win32') return a === b;
+  const norm = (p: string): string => p.replace(/\//g, '\\').toLowerCase();
+  return norm(a) === norm(b);
+}
+
 export function transcriptPath(
   projectsRoot: string,
   sessionId: string,
@@ -88,7 +99,7 @@ export function verifySessionIdentity(
     } catch {
       /* 帧内路径可能已不存在，按原样比对 */
     }
-    if (realFrameCwd === realWorkspace) return { ok: true };
+    if (samePath(realFrameCwd, realWorkspace)) return { ok: true };
   }
   return { ok: false, reason: '转写帧内 cwd 与登记工作区不一致' };
 }

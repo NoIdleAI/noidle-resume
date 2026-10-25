@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { transcriptPath } from '../../adapters/vscode-claude/transcriptLocator.ts';
 import {
   findUserEntryByContent,
@@ -8,6 +9,8 @@ import {
 } from './transcript.ts';
 import { assertCold, type ColdCheckResult } from './coldGuard.ts';
 import { redact } from '../../shared/redact.ts';
+
+const execFileAsync = promisify(execFile);
 
 export type ResumeAttemptKind = 'ok' | 'still-limited' | 'error' | 'timeout';
 
@@ -57,6 +60,79 @@ interface SpawnOutcome {
 }
 
 /**
+ * 平台策略点 3：Windows 下的 claude 拉起方式。
+ * 原生安装（claude.exe）：libuv 自带 PATH 搜索与 argv 引号处理，直 spawn；
+ * npm shim（claude.cmd/.bat）：libuv 无法直接 spawn（EINVAL），经
+ * `cmd /d /s /c "<整条命令>"` 包装，参数自行按 MSVCRT 规则引号转义。
+ * verbatim=true 时 Node 不再加工参数（cmd 不认 \" 转义），整行必须已转义完毕。
+ */
+export interface SpawnPlan {
+  bin: string;
+  args: string[];
+  verbatim: boolean;
+}
+
+export function windowsSpawnPlan(bin: string, args: string[], comspec?: string): SpawnPlan {
+  const lower = bin.toLowerCase();
+  if (!lower.endsWith('.cmd') && !lower.endsWith('.bat')) {
+    return { bin, args, verbatim: false };
+  }
+  const line = [bin, ...args].map(argvQuote).join(' ');
+  return {
+    bin: comspec ?? process.env.comspec ?? 'cmd.exe',
+    args: ['/d', '/s', '/c', `"${line}"`],
+    verbatim: true,
+  };
+}
+
+/**
+ * MSVCRT argv 引号规则：无空格无引号的参数裸传；否则整体加引号，
+ * 引号写作 反斜杠×(前置反斜杠数×2+1)+"，引号前的连续反斜杠按双倍落尾。
+ * 纯函数，单测覆盖（tests/unit/platform.test.ts）。
+ */
+export function argvQuote(arg: string): string {
+  if (arg !== '' && !/[\s"]/.test(arg)) return arg;
+  let out = '"';
+  let slashes = 0;
+  for (const ch of arg) {
+    if (ch === '\\') {
+      slashes++;
+      continue;
+    }
+    if (ch === '"') out += '\\'.repeat(slashes * 2 + 1);
+    else out += '\\'.repeat(slashes);
+    slashes = 0;
+    out += ch;
+  }
+  return out + '\\'.repeat(slashes * 2) + '"';
+}
+
+const whereCache = new Map<string, Promise<string>>();
+
+/**
+ * 裸名 claude 在 Windows 的落地解析：`where claude` 探测一次并缓存，
+ * .exe 优先（原生安装），回落 .cmd/.bat（npm shim）；探测失败按原样
+ * 交给 libuv PATH 搜索。有扩展名的配置按原样直用。
+ */
+export function resolveWindowsBin(bin: string, run: typeof execFileAsync = execFileAsync): Promise<string> {
+  if (/\.(exe|cmd|bat)$/i.test(bin)) return Promise.resolve(bin);
+  const cached = whereCache.get(bin);
+  if (cached) return cached;
+  const probe = run('where.exe', [bin], { timeout: 5000, windowsHide: true })
+    .then(({ stdout }) => {
+      const hits = stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      return (
+        hits.find((h) => /\.exe$/i.test(h)) ??
+        hits.find((h) => /\.(cmd|bat)$/i.test(h)) ??
+        bin
+      );
+    })
+    .catch(() => bin);
+  whereCache.set(bin, probe);
+  return probe;
+}
+
+/**
  * 硬结算执行：不管子进程怎么退场都保证落定。
  * 教训（2026-10-24 真机）：CLI 答完轮次后可能因 MCP 子进程等攥住 stdio 不退场，
  * execFile 的 Promise 会永远悬着 → 任务卡 recovering。这里 SIGTERM→SIGKILL→兜底强制结算，
@@ -72,7 +148,17 @@ function execHardSettled(
     let killed = false;
     let stdout = '';
     let stderr = '';
-    const child = spawn(bin, args, { cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    // windowsHide：sidecar 本身无控制台，防止子进程另开黑窗闪烁
+    const plan =
+      process.platform === 'win32'
+        ? windowsSpawnPlan(bin, args)
+        : ({ bin, args, verbatim: false } satisfies SpawnPlan);
+    const child = spawn(plan.bin, plan.args, {
+      cwd: opts.cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      windowsVerbatimArguments: plan.verbatim,
+    });
     child.stdout?.on('data', (b: Buffer) => {
       if (stdout.length < opts.maxBuffer) stdout += b;
     });
@@ -131,7 +217,12 @@ export class ClaudeResumeRunner implements ResumeRunner {
       '--permission-mode',
       'default',
     ];
-    const out = await execHardSettled(this.opts.claudeBin, args, {
+    // Windows：裸名先经 where 落地（exe 优先），.cmd shim 再由 spawn 计划包装
+    const bin =
+      process.platform === 'win32'
+        ? await resolveWindowsBin(this.opts.claudeBin)
+        : this.opts.claudeBin;
+    const out = await execHardSettled(bin, args, {
       cwd: projectPath,
       timeoutMs,
       maxBuffer: MAX_BUFFER,

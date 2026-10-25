@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DiscoveredSessionDto } from '@noidle/resume-contracts';
 import type { SessionsRepo } from '../../persistence/repos/sessions.ts';
-import { readHeadLines } from '../../adapters/vscode-claude/transcriptLocator.ts';
+import { readHeadLines, samePath } from '../../adapters/vscode-claude/transcriptLocator.ts';
 
 /** 头部读取窗口：按行数为主（ai-title/cwd 帧都在前几十行），字节为兜底上限。 */
 const HEAD_MAX_LINES = 120;
@@ -94,9 +94,9 @@ export class DiscoveryService {
   private isRegistered(sessionId: string, projectPath: string): boolean {
     for (const s of this.deps.sessions.list()) {
       if (s.session_id !== sessionId) continue;
-      if (s.project_path === projectPath) return true;
+      if (samePath(s.project_path, projectPath)) return true;
       try {
-        if (fs.realpathSync(s.project_path) === projectPath) return true;
+        if (samePath(fs.realpathSync(s.project_path), projectPath)) return true;
       } catch {
         /* 登记目录已删则按原样不等 */
       }
