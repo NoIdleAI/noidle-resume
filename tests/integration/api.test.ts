@@ -265,3 +265,19 @@ test('转写监听接线：tailer 增量读到限额帧 → 自动建任务', as
   assert.equal(outcome.taskCreated, true);
   assert.equal(outcome.task!.status, 'waiting');
 });
+
+test('revision 对账端点：随事件单调递增（2026-10-25 冻结事故的兜底层）', async () => {
+  const before = await app.inject({ method: 'GET', url: '/api/v1/revision', headers: bearer });
+  assert.equal(before.statusCode, 200);
+  const seq0 = before.json().seq;
+  assert.ok(Number.isInteger(seq0));
+  // 发一条事件（总线直发）后 seq 必须前进
+  env.ctx.bus.emit('service.note', { note: 'test' });
+  const after = await app.inject({ method: 'GET', url: '/api/v1/revision', headers: bearer });
+  assert.ok(after.json().seq > seq0, `seq 应前进: ${seq0} -> ${after.json().seq}`);
+});
+
+test('revision 未鉴权 → 401', async () => {
+  const res = await app.inject({ method: 'GET', url: '/api/v1/revision' });
+  assert.equal(res.statusCode, 401);
+});

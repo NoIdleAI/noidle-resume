@@ -82,6 +82,9 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 export const api = {
   health: () => request<HealthInfo>('GET', '/api/v1/health'),
 
+  /** 对账：服务端事件游标（与 WS 心跳的 seq 同源；不一致即补拉快照）。 */
+  revision: () => request<{ seq: number }>('GET', '/api/v1/revision'),
+
   // ---- 鉴权 ----
   verify: () => request<{ ok: boolean }>('POST', '/api/v1/auth/verify'),
 

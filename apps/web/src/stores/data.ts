@@ -168,23 +168,32 @@ function upsertSession(row: SessionWithTask): void {
 }
 
 function handleEvent(evt: WsEvent): void {
+  touchWatchdog(evt); // 任何帧（含心跳）都证明连接活着，并推进本地游标
   switch (evt.type) {
     case 'task.changed': {
       upsertTask(evt.payload as ResumeTaskDto);
+      debouncedRefresh(refreshLogs, 'logs'); // 审计面板不再停在「服务启动」
       break;
     }
     case 'event.detected': {
       store.events.unshift(evt.payload as UsageEventDto);
       debouncedRefresh(refreshTasks, 'tasks');
       debouncedRefresh(refreshSessions, 'sessions');
+      debouncedRefresh(refreshLogs, 'logs');
       break;
     }
     case 'session.changed': {
       debouncedRefresh(refreshSessions, 'sessions');
+      debouncedRefresh(refreshLogs, 'logs');
       break;
     }
     case 'service.note': {
       debouncedRefresh(refreshLogs, 'logs');
+      break;
+    }
+    case 'heartbeat': {
+      // 纯探活/对账帧：游标已在 touchWatchdog 推进，无数据要刷。
+      // 若本该夹在两拍心跳之间的事件没到（seq 有缺口），对账轮询会兜住。
       break;
     }
   }
@@ -207,6 +216,13 @@ function connectWs(): void {
   const socket = new WebSocket(`${proto}://${location.host}/api/v1/events`);
   socket.onopen = () => {
     store.connected = true;
+    // 重连即补快照（2026-10-25 冻结事故）：断线期间错过的事件不再永久缺失。
+    // 快照拉完刷新本地游标，避免对账轮询再触发一次全量。
+    void refreshAll()
+      .catch(() => undefined)
+      .finally(() => {
+        lastSeq = null; // 以下一帧事件/心跳重新对齐
+      });
   };
   socket.onmessage = (m) => {
     try {
@@ -223,7 +239,7 @@ function connectWs(): void {
       store.auth = 'gate';
       return;
     }
-    retryTimer = window.setTimeout(connectWs, 3000);
+    scheduleReconnect();
   };
   socket.onerror = () => {
     try {
@@ -233,6 +249,72 @@ function connectWs(): void {
     }
   };
   ws = socket;
+}
+
+// ---- 可靠性设施（2026-10-25 页面冻结事故的四层防线，业界通行做法） ----
+// ① 服务端 20s 心跳（见 api/ws.ts）② 本地看门狗判半开 ③ revision 对账兜底
+// ④ 重连/回前台补快照。拔掉任意一层，界面最多旧 20s，而不是旧一晚上。
+
+/** 本地 WS 游标（最近一帧的 seq）与最后一帧到达时刻。 */
+let lastSeq: number | null = null;
+let lastMsgAt = 0;
+/** 看门狗：超过 45s（2 拍心跳 + 余量）没有任何帧 → 判半开，主动断开触发重连。 */
+const STALE_MS = 45_000;
+/** 对账周期：20s 一问，给最大陈旧时间封顶。 */
+const RECONCILE_MS = 20_000;
+
+function touchWatchdog(evt: WsEvent): void {
+  lastMsgAt = Date.now();
+  if (typeof evt.seq === 'number') lastSeq = evt.seq;
+}
+
+function scheduleReconnect(): void {
+  if (retryTimer !== null) window.clearTimeout(retryTimer);
+  retryTimer = window.setTimeout(connectWs, 3000);
+}
+
+/** revision 对账：服务端 seq 领先本地游标 = 有事件没送到 → 补拉快照。 */
+async function reconcile(): Promise<void> {
+  if (store.auth !== 'ok' || document.visibilityState === 'hidden') return;
+  try {
+    const { seq } = await api.revision();
+    if (lastSeq === null) {
+      lastSeq = seq; // 首次对齐（如 WS 一直没连上，纯 HTTP 也能对齐）
+      return;
+    }
+    if (seq !== lastSeq) {
+      await refreshAll();
+      lastSeq = seq;
+    }
+  } catch {
+    /* 服务暂不可达：下轮再试 */
+  }
+}
+
+let reliabilityStarted = false;
+
+/** 幂等启动：App 挂载时调用（与 startTicker 同级）。 */
+export function startReliabilityWatch(): void {
+  if (reliabilityStarted) return;
+  reliabilityStarted = true;
+  // 看门狗：15s 巡检一次「多久没收到帧」
+  window.setInterval(() => {
+    if (store.auth !== 'ok' || !lastMsgAt) return;
+    if (Date.now() - lastMsgAt > STALE_MS) {
+      try {
+        ws?.close(); // 半开连接：主动断开，走 onclose 的重连路径
+      } catch {
+        /* 忽略 */
+      }
+    }
+  }, 15_000);
+  // 对账轮询：WS 再怎么出问题，数据最多旧 20s
+  window.setInterval(() => void reconcile(), RECONCILE_MS);
+  // 回前台必刷新：系统挂起隐藏窗口期间世界已经变了
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshAll().catch(() => undefined);
+  });
+  window.addEventListener('focus', () => void refreshAll().catch(() => undefined), { once: false });
 }
 
 // ---- 鉴权入口 ----

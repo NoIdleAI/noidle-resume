@@ -161,12 +161,16 @@ export type WsEventType =
   | 'task.changed'
   | 'session.changed'
   | 'event.detected'
-  | 'service.note';
+  | 'service.note'
+  /** 服务端 20s 心跳：兼做探活与对账（payload 携带当前 seq）。 */
+  | 'heartbeat';
 
 export interface WsEvent<T = unknown> {
   type: WsEventType;
   at: string;
   payload: T;
+  /** 全局单调事件序号：客户端据此对账，发现缺口即补拉快照。 */
+  seq?: number;
 }
 
 /** 最近会话发现（扫描转写根，供登记下拉选择；纯扫描结果，不入库）。 */

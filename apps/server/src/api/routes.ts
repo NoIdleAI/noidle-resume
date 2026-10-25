@@ -21,6 +21,12 @@ export function registerRoutes(app: FastifyInstance, ctx: AppContext): void {
     time: ctx.clock.now().toISOString(),
   }));
 
+  /**
+   * 对账端点（2026-10-25 页面冻结事故）：客户端 20s 轮询一次问「世界到第几号了」，
+   * 与本地 WS 游标不一致即补拉快照。几十字节往返，WS 半开/漏推的兜底保险丝。
+   */
+  app.get('/api/v1/revision', async () => ({ seq: ctx.bus.seq }));
+
   // ---- 会话白名单 ----
   app.get('/api/v1/sessions', async () => {
     const rows = services.sessions.listWithActiveTask();

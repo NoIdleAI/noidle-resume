@@ -7,8 +7,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- Windows 客户端（Tauri v2 壳 + 同一 bun 单文件 sidecar）：数据目录 `%APPDATA%\noidle-resume`、自启动走注册表、NSIS currentUser 安装（简中/英文）
+- Windows 冷会话守卫：PowerShell CIM 枚举进程命令行（WQL 服务端过滤 + 参数白名单防注入），探测失败仍按热持有保守拒跑
+- Windows 续跑引擎：`where` 落地解析（exe 优先）、npm shim（.cmd/.bat）经 `cmd /d /s /c` 包装与 MSVCRT 引号转义
+- 转写路径等值判定 `samePath`：Windows 大小写不敏感 + 分隔符归一（转写定位、登记核验、发现去重三处共用）
+- `scripts/build-sidecar.mjs`（`npm run build:sidecar[:win]`）：bun 单文件编译 sidecar，支持从 mac/linux 交叉编译 Windows exe
+- GitHub Actions 双平台构建（`.github/workflows/build.yml`）：macOS 出 .dmg、Windows 出 NSIS exe，两平台都跑全量测试；打 tag `v*` 或手动触发
+- WS 可靠性四层防线（修复值守台页面冻结在旧快照）：事件总线全局单调 `seq` + WS 20s 心跳（连接即发对齐帧）+ `GET /api/v1/revision` 对账端点 + 前端看门狗（45s 无帧判半开重连）/20s 对账轮询/重连与回前台补拉快照；任务与会话变更同步刷新审计面板
+
+### Fixed
+
+- 值守台页面自首次加载后不再更新（macOS 挂起隐藏窗口 + WS 半开连接叠加导致冻结一晚）：重连/回前台/对账三条补快照路径 + 心跳探活，界面最大陈旧时间封顶 20s
+
+### Changed
+
+- tauri.conf.json 拆分平台配置：`tauri.macos.conf.json`（app+dmg）与 `tauri.windows.conf.json`（nsis + icon.ico）
+- 桌面壳数据目录按平台分派（与 `config.ts defaultDataDir` 注释互链，两处同源）；Unix 信号收割限定 macOS/Linux（`signal-hook` 改为 unix-only 依赖）
+- 迁移目录定位改用 `fileURLToPath`（修复 Windows 下 `URL.pathname` 的 `/C:/...` 形态）；legacy 数据目录搬迁限定 macOS
+
 ### 计划中
 
+- Windows 真机验证（安装 → 托盘 → 自启 → 登记 → 限额 → 自动续跑全链）
 - 阶段四：安全加固、兼容性扩展与发布
 
 ## [0.1.0] - 2026-10-24

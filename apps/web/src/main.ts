@@ -1,11 +1,12 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import { router } from './router/index';
-import { initAuth } from './stores/data';
+import { initAuth, startReliabilityWatch } from './stores/data';
 import { startTicker } from './stores/ticker';
 import './styles/tokens.css';
 
 startTicker();
+startReliabilityWatch(); // 心跳看门狗 + revision 对账 + 回前台补快照（四层防冻结）
 void initAuth();
 
 createApp(App).use(router).mount('#app');
