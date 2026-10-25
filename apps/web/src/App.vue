@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { store } from './stores/data';
+import { uiZoom, zoomBy, applyZoom } from './stores/uiZoom';
 import ServiceBadge from './components/ServiceBadge.vue';
 import TokenGate from './pages/TokenGate.vue';
 
@@ -13,6 +14,7 @@ const onSessions = computed(() => route.name === 'sessions' || route.name === 't
 const onSettings = computed(() => route.name === 'settings');
 
 // 顶栏三键:收起/展开侧栏(记忆偏好)、后退、前进(按浏览历史位置点亮)
+const zoomPct = computed(() => Math.round(uiZoom.value * 100));
 const sideHidden = ref(localStorage.getItem('car_side') === '1');
 function toggleSide(): void {
   sideHidden.value = !sideHidden.value;
@@ -122,6 +124,13 @@ onMounted(() => {
 
       <div class="side-push"></div>
       <ServiceBadge />
+      <!-- 任务卡等比缩放：卡片排版不动，仅卡片等比缩小；记忆在 localStorage -->
+      <div class="zoomctl">
+        <button class="zc" title="缩小" @click="zoomBy(-0.05)">−</button>
+        <span class="zp mono" :title="'任务卡缩放 ' + zoomPct + '%（默认 80%）'">{{ zoomPct }}%</span>
+        <button class="zc" title="放大" @click="zoomBy(0.05)">＋</button>
+        <button v-if="uiZoom !== 1" class="zc rst" title="恢复 100%" @click="applyZoom(1)">1:1</button>
+      </div>
       <div class="side-note">本地优先 · 数据不出本机 · <span class="mono">v0.1</span></div>
     </aside>
 

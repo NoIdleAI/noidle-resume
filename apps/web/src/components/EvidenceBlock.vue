@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import type { UsageEventDto } from '@noidle/resume-contracts';
 import { fmtMDHM } from '../stores/format';
 import { settings } from '../stores/data';
 
 const props = defineProps<{ event: UsageEventDto | null }>();
-/** 长报错默认两行截断，点击展开全文（防止把主卡撑高） */
-const open = ref(false);
 
 const sourceLabel = computed(() =>
   props.event ? (props.event.source === 'transcript' ? '来源 转写帧' : '来源 人工登记') : '',
@@ -33,6 +31,6 @@ const frameProof = computed(() => {
       <span class="tag">{{ sourceLabel }}</span>
       <span class="when">{{ frameProof }}</span>
     </div>
-    <div class="raw" :class="{ open }" :title="open ? undefined : '点击展开全文'" @click="open = !open">{{ event.rawMessage ?? '（原始错误文本未留存）' }}</div>
+    {{ event.rawMessage ?? '（原始错误文本未留存）' }}
   </div>
 </template>
