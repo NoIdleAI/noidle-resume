@@ -90,25 +90,12 @@ body {
 .tb:disabled { opacity: .35; cursor: default; }
 .tb svg { width: 16px; height: 16px; }
 
-/* 任务卡等比缩放控件（侧栏底部，紧邻服务状态） */
-.zoomctl { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 0 0; }
-.zc {
-  width: 22px; height: 20px; border-radius: 6px; border: 1px solid var(--line-2);
-  background: none; color: var(--tx-2); font-size: 12px; line-height: 1; cursor: pointer;
-  display: grid; place-items: center;
-}
-.zc:hover { color: var(--tx); border-color: rgba(224,120,90,.5); }
-.zc.rst { width: auto; padding: 0 6px; font-size: 10.5px; }
-.zp { font-size: 10.5px; color: var(--tx-3); min-width: 34px; text-align: center; }
-
 /* ===== 面板与卡 ===== */
 .hero {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 22px 24px 20px;
-  /* 任务卡等比缩放（排版不动）：zoom 保持满宽，内容/高度按系数缩；侧栏 -/＋ 可调 */
-  zoom: var(--card-zoom, 1);
 }
 .hero-top { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
 .hero-top h1 { font-size: 16.5px; font-weight: 650; }

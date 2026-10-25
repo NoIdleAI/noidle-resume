@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { store } from './stores/data';
-import { uiZoom, zoomBy, applyZoom } from './stores/uiZoom';
 import TokenGate from './pages/TokenGate.vue';
 
 const route = useRoute();
@@ -11,7 +10,6 @@ const onDashboard = computed(() => route.name === 'dashboard');
 // 会话详情(/tasks/:id)归属会话分组,侧栏保持高亮
 const onSessions = computed(() => route.name === 'sessions' || route.name === 'task');
 const onSettings = computed(() => route.name === 'settings');
-const zoomPct = computed(() => Math.round(uiZoom.value * 100));
 const onAbout = computed(() => route.name === 'about');
 
 // 顶栏三键:收起/展开侧栏(记忆偏好)、后退、前进(按浏览历史位置点亮)
@@ -129,13 +127,6 @@ onMounted(() => {
       </router-link>
 
       <div class="side-push"></div>
-      <!-- 任务卡等比缩放：排版不动，卡片整体缩小；记忆在 localStorage -->
-      <div class="zoomctl">
-        <button class="zc" title="缩小任务卡" @click="zoomBy(-0.05)">−</button>
-        <span class="zp mono" :title="'任务卡缩放 ' + zoomPct + '%'">{{ zoomPct }}%</span>
-        <button class="zc" title="放大任务卡" @click="zoomBy(0.05)">＋</button>
-        <button v-if="uiZoom !== 1" class="zc rst" title="恢复 100%" @click="applyZoom(1)">1:1</button>
-      </div>
     </aside>
 
     <main class="main">
