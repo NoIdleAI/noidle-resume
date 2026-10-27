@@ -135,6 +135,15 @@ export interface SettingsDto {
   concurrency: number;
   /** 自动化重发：恢复结果未知/失败时按退避间隔自动重发（关闭则结果未知一次即终止，绝不重发）。 */
   autoResend: boolean;
+  /**
+   * 热会话接管（实验性，默认关）：到期时若 VS Code 侧仍持有该会话（热），
+   * 转写静默超过 hotTakeoverQuietMs 后，结束其专属持有进程（仅命令行精确带
+   * --resume=<sid> 的进程，绝不碰共享 daemon）→ 续跑 → URI 复活会话界面。
+   * 关闭时热持有维持既有退避行为。
+   */
+  hotTakeover: boolean;
+  /** 热会话接管的静默门槛（毫秒，默认 10 分钟）：转写最近写入需早于此值。 */
+  hotTakeoverQuietMs: number;
 }
 
 /** 脱敏操作日志（设计书 §8.5）。 */

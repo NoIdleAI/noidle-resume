@@ -13,6 +13,8 @@ export const SETTINGS_DEFAULTS: SettingsDto = {
   resumePromptTemplate: '继续 [car:auto {taskId}]',
   concurrency: 1,
   autoResend: true,
+  hotTakeover: false,
+  hotTakeoverQuietMs: 600_000,
 };
 
 const NUMERIC_KEYS = [
@@ -21,6 +23,7 @@ const NUMERIC_KEYS = [
   'backoffCapMs',
   'resumeAttemptTimeoutMs',
   'concurrency',
+  'hotTakeoverQuietMs',
 ] as const;
 
 /** 配置服务（设计书 §8.4）：DB 覆盖默认值；时区不硬编码。 */
@@ -62,6 +65,9 @@ export class SettingsService {
     next.concurrency = Math.min(3, Math.max(1, Math.round(next.concurrency)));
     if (typeof next.autoResend !== 'boolean') {
       throw validationError('autoResend 必须为布尔值');
+    }
+    if (typeof next.hotTakeover !== 'boolean') {
+      throw validationError('hotTakeover 必须为布尔值');
     }
     if (
       typeof next.resumePromptTemplate !== 'string' ||

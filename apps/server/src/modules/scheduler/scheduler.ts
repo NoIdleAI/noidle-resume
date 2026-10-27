@@ -11,7 +11,10 @@ import { backoffDelay } from './backoff.ts';
 import { parseLimitMessage } from '../limit/detector.ts';
 import { isSupportedTimezone, zonedTimeToUtc } from '../limit/timezone.ts';
 import { toTaskDto } from '../../shared/mappers.ts';
+import { killHotHolders, reviveSession, transcriptQuiet } from '../resume/hotTakeover.ts';
 import fs from 'node:fs';
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export interface SchedulerDeps {
   tasks: TasksRepo;
@@ -114,28 +117,66 @@ export class ResumeScheduler {
       return;
     }
 
-    // ③ 冷会话守卫（§5.1 规则 11）：热持有 → 计一次尝试，退避后自动重试直到上限
+    // ③ 冷会话守卫（§5.1 规则 11）：热持有 → 按「热会话接管」开关分流
     const cold = await runner.assertCold(task.session_id);
+    let didTakeover = false;
     if (!cold.cold) {
       const cfg = settings.get();
-      const attempt = task.attempt_count + 1;
-      this.deps.audit.log(
-        'task.hot_held',
-        task.id,
-        `pids=${cold.pids?.join(',') ?? ''} err=${cold.error ?? ''} attempt=${attempt}`,
-        'system',
-      );
-      if (attempt >= cfg.maxAttempts) {
-        tasks.finishFromChecking(task.id, 'failed', 'SESSION_HOT_HELD', at());
-        this.notify(task.id);
-        this.autoRemoveSession(task);
+
+      if (cfg.hotTakeover) {
+        // 热会话接管（实验性，2026-10-25 真机实验定案）：
+        // 静默达标 → 只杀命令行精确带 --resume=<sid> 的专属持有进程 → 复查变冷 → 走正常续跑。
+        // 未静默（用户可能正在聊）或复查仍热 → 5 分钟后再探，热持有不烧尝试次数。
+        let takenOver = false;
+        if (transcriptQuiet(file, cfg.hotTakeoverQuietMs)) {
+          const killed = await killHotHolders(task.session_id);
+          if (killed.length > 0) {
+            await sleep(2500); // 留出进程退出时间
+            const recheck = await runner.assertCold(task.session_id);
+            takenOver = recheck.cold;
+            this.deps.audit.log(
+              'task.hot_takeover',
+              task.id,
+              `killed=${killed.join(',')} coldAfter=${takenOver}`,
+              'system',
+            );
+          }
+        } else {
+          this.deps.audit.log(
+            'task.hot_active_deferred',
+            task.id,
+            '转写仍活跃（用户可能在聊），推迟接管',
+            'system',
+          );
+        }
+        if (!takenOver) {
+          const nextAt = new Date(this.deps.clock.now().getTime() + 300_000).toISOString();
+          tasks.hotHoldBackToWaiting(task.id, task.attempt_count, nextAt, at());
+          this.notify(task.id);
+          return;
+        }
+        didTakeover = true; // 已接管变冷，继续正常续跑
       } else {
-        const delay = backoffDelay(attempt, cfg.backoffBaseMs, cfg.backoffCapMs);
-        const nextAt = new Date(this.deps.clock.now().getTime() + delay).toISOString();
-        tasks.hotHoldBackToWaiting(task.id, attempt, nextAt, at());
+        // 既有行为（开关关，默认）：热持有计一次尝试，退避重试直到上限
+        const attempt = task.attempt_count + 1;
+        this.deps.audit.log(
+          'task.hot_held',
+          task.id,
+          `pids=${cold.pids?.join(',') ?? ''} err=${cold.error ?? ''} attempt=${attempt}`,
+          'system',
+        );
+        if (attempt >= cfg.maxAttempts) {
+          tasks.finishFromChecking(task.id, 'failed', 'SESSION_HOT_HELD', at());
+          this.notify(task.id);
+          this.autoRemoveSession(task);
+        } else {
+          const delay = backoffDelay(attempt, cfg.backoffBaseMs, cfg.backoffCapMs);
+          const nextAt = new Date(this.deps.clock.now().getTime() + delay).toISOString();
+          tasks.hotHoldBackToWaiting(task.id, attempt, nextAt, at());
+        }
+        this.notify(task.id);
+        return;
       }
-      this.notify(task.id);
-      return;
     }
 
     // ④ checking → recovering：钉住起点叶与提示词（核验凭据）
@@ -165,6 +206,10 @@ export class ResumeScheduler {
       tasks.markResumed(task.id, verify.leafUuid, evidence, at());
       this.deps.audit.log('task.resumed', task.id, `leaf=${verify.leafUuid}`, 'system');
       this.notify(task.id);
+      // 接管路径下，被结束的持有 tab 需要复活（实验定案：URI 重开即重读文件，血统不破）
+      if (didTakeover) {
+        reviveSession(task.session_id, task.display_name ?? undefined);
+      }
       this.autoRemoveSession(task);
       return;
     }

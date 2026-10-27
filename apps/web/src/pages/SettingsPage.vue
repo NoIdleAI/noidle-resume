@@ -18,6 +18,7 @@ const form = reactive({
   concurrency: settings.value.concurrency,
   resumePromptTemplate: settings.value.resumePromptTemplate,
   autoResend: settings.value.autoResend,
+  hotTakeover: settings.value.hotTakeover,
 });
 let loadedFor = store.settings?.timezone;
 // settings 异步到达后回填一次
@@ -32,6 +33,7 @@ void Promise.resolve().then(() => {
     form.concurrency = store.settings.concurrency;
     form.resumePromptTemplate = store.settings.resumePromptTemplate;
     form.autoResend = store.settings.autoResend;
+    form.hotTakeover = store.settings.hotTakeover;
   }
 });
 
@@ -63,6 +65,7 @@ async function onSave(): Promise<void> {
       concurrency: Math.min(3, Math.max(1, Math.floor(form.concurrency))),
       resumePromptTemplate: form.resumePromptTemplate,
       autoResend: form.autoResend,
+      hotTakeover: form.hotTakeover,
     });
     await refreshSettings();
     saveOk.value = '已保存（立即生效）';
@@ -97,6 +100,19 @@ async function reloadLogs(): Promise<void> {
       <div class="note">
         开启（推荐）：无人值守全自动，最多尝试「最大尝试次数」次后如实报告失败。
         关闭：结果未知一次即终止，绝不重发（防重复投喂保守模式）。
+      </div>
+    </div>
+    <div class="field" style="margin-bottom: 16px">
+      <label class="autoresend">
+        <input v-model="form.hotTakeover" type="checkbox" />
+        <span>热会话接管 — 实验性</span>
+      </label>
+      <div class="note">
+        开启：到期时若 VS Code 仍开着该会话（热持有），确认你已 10 分钟没动它后，
+        结束其专属持有进程（只杀该会话的进程，绝不碰共享组件）→ 自动续跑 → 自动
+        刷新 VS Code 里的会话界面并弹通知。VS Code 全程不用关。
+        关闭（默认）：热持有按退避重试直至次数上限（现行为）。挂机不聊的会话无进程、
+        天然是冷的，两种模式下都直接续跑。
       </div>
     </div>
     <div class="form-grid">

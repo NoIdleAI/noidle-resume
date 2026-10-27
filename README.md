@@ -199,6 +199,7 @@ macOS 侧拖拽删除没有「卸载事件」，提供双击即用的完全卸�
 | 登记下拉 = 只读扫描转写根最近会话（`entrypoint=claude-vscode` 才收，不入库） | `modules/discover/discoveryService.ts` |
 | 重置时刻按配置时区解析 | `modules/limit/timezone.ts` |
 | 冷会话守卫 `pgrep` / PowerShell CIM `--resume=<sid>` | `modules/resume/coldGuard.ts` |
+| 热会话接管（实验开关）：静默判定 → 精准收割持有进程 → URI 复活 | `modules/resume/hotTakeover.ts` |
 | headless 续跑引擎 | `modules/resume/runner.ts` |
 | 叶血统核验，禁文件级启发 | `modules/resume/transcript.ts` |
 | 串行调度 + 指数退避 | `modules/scheduler/` |

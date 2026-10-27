@@ -93,6 +93,8 @@ export const settings = computed<SettingsDto>(
       resumePromptTemplate: '继续 [car:auto {taskId}]',
       concurrency: 1,
       autoResend: true,
+      hotTakeover: false,
+      hotTakeoverQuietMs: 600_000,
     },
 );
 
